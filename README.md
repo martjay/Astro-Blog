@@ -47,8 +47,8 @@
 
 1. 克隆仓库：
 \`\`\`bash
-git clone https://github.com/yourusername/blog.git
-cd blog
+git clone https://github.com/martjay/astro–blog.git
+cd astro-blog
 \`\`\`
 
 2. 安装依赖：
