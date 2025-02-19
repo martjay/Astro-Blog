@@ -47,7 +47,7 @@
 
 1. 克隆仓库：
 \`\`\`bash
-git clone https://github.com/martjay/astro–blog.git
+git clone https://github.com/martjay/astro-blog.git
 cd astro-blog
 \`\`\`
 
