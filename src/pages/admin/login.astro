@@ -1,0 +1,213 @@
+---
+import BaseLayout from '../../layouts/BaseLayout.astro';
+import { auth } from '../../lib/auth';
+import { isAuthenticated } from '../../middleware/auth';
+import { captcha } from '../../lib/captcha';
+
+// 检查用户是否已经登录
+if (await isAuthenticated(Astro)) {
+  return Astro.redirect('/admin/posts');
+}
+
+let error = '';
+const redirect = Astro.url.searchParams.get('redirect') || '/admin/posts';
+
+if (Astro.request.method === 'POST') {
+  const formData = await Astro.request.formData();
+  const username = formData.get('username')?.toString();
+  const password = formData.get('password')?.toString();
+  const captchaCode = formData.get('captcha')?.toString();
+  const captchaSession = formData.get('captcha_session')?.toString();
+
+  if (!username || !password || !captchaCode || !captchaSession) {
+    error = '请填写所有必填项';
+  } else if (!captcha.verify(captchaSession, captchaCode)) {
+    error = '验证码错误';
+  } else {
+    const admin = auth.verifyCredentials(username, password);
+    if (admin) {
+      const sessionId = auth.createSession(admin.id);
+      
+      Astro.cookies.set('session', sessionId, {
+        path: '/',
+        httpOnly: true,
+        secure: true,
+        sameSite: 'strict',
+        maxAge: 60 * 60 * 24 * 7 // 7天
+      });
+
+      return Astro.redirect(redirect);
+    } else {
+      error = '用户名或密码错误';
+    }
+  }
+}
+---
+
+<BaseLayout title="管理员登录">
+  <div class="min-h-screen relative overflow-hidden bg-gradient-to-br from-blue-600 to-purple-700 dark:from-blue-900 dark:to-purple-900">
+    <div class="absolute inset-0">
+      <div class="absolute inset-0 bg-gradient-to-br from-blue-600/90 to-purple-700/90 dark:from-blue-900/90 dark:to-purple-900/90"></div>
+      <div class="absolute inset-0 bg-grid-white/[0.05] bg-grid-12"></div>
+    </div>
+    
+    <div class="relative flex items-center justify-center min-h-screen">
+      <div class="w-full max-w-md p-8 bg-white/10 dark:bg-gray-800/50 backdrop-blur-xl rounded-2xl shadow-2xl animate-fade-in">
+        <div class="text-center mb-8">
+          <h1 class="text-3xl font-bold text-white mb-2">管理员登录</h1>
+          <p class="text-white/80">欢迎回来，请登录您的账户</p>
+        </div>
+        
+        {error && (
+          <div class="mb-6 p-4 bg-red-500/20 backdrop-blur-sm border border-red-500/30 rounded-lg">
+            <p class="text-red-100 text-center">{error}</p>
+          </div>
+        )}
+
+        <form method="POST" class="space-y-6">
+          <div>
+            <label for="username" class="block text-sm font-medium text-white/90 mb-2">用户名</label>
+            <input
+              type="text"
+              id="username"
+              name="username"
+              required
+              class="w-full px-4 py-3 bg-white/10 border border-white/20 rounded-lg text-white placeholder-white/50 focus:outline-none focus:ring-2 focus:ring-white/30 transition-all"
+              placeholder="请输入用户名"
+            />
+          </div>
+          
+          <div>
+            <label for="password" class="block text-sm font-medium text-white/90 mb-2">密码</label>
+            <input
+              type="password"
+              id="password"
+              name="password"
+              required
+              class="w-full px-4 py-3 bg-white/10 border border-white/20 rounded-lg text-white placeholder-white/50 focus:outline-none focus:ring-2 focus:ring-white/30 transition-all"
+              placeholder="请输入密码"
+            />
+          </div>
+
+          <div>
+            <label for="captcha" class="block text-sm font-medium text-white/90 mb-2">验证码</label>
+            <div class="flex gap-2">
+              <input
+                type="text"
+                id="captcha"
+                name="captcha"
+                required
+                maxlength="4"
+                class="flex-grow px-4 py-3 bg-white/10 border border-white/20 rounded-lg text-white placeholder-white/50 focus:outline-none focus:ring-2 focus:ring-white/30 transition-all"
+                placeholder="请输入验证码"
+              />
+              <div class="relative">
+                <div id="captcha-image" class="w-30 h-12 border border-white/20 rounded-lg overflow-hidden">
+                  <!-- 验证码图片将在这里显示 -->
+                </div>
+                <button
+                  type="button"
+                  id="refresh-captcha"
+                  class="absolute top-0 right-0 p-1 text-white/50 hover:text-white"
+                  title="刷新验证码"
+                >
+                  <svg class="w-4 h-4" viewBox="0 0 20 20" fill="currentColor">
+                    <path fill-rule="evenodd" d="M4 2a1 1 0 011 1v2.101a7.002 7.002 0 0111.601 2.566 1 1 0 11-1.885.666A5.002 5.002 0 005.999 7H9a1 1 0 010 2H4a1 1 0 01-1-1V3a1 1 0 011-1zm.008 9.057a1 1 0 011.276.61A5.002 5.002 0 0014.001 13H11a1 1 0 110-2h5a1 1 0 011 1v5a1 1 0 11-2 0v-2.101a7.002 7.002 0 01-11.601-2.566 1 1 0 01.61-1.276z" clip-rule="evenodd" />
+                  </svg>
+                </button>
+              </div>
+            </div>
+          </div>
+
+          <input type="hidden" name="redirect" value={redirect} />
+          <input type="hidden" id="captcha-session" name="captcha_session" value="" />
+
+          <button
+            type="submit"
+            class="w-full px-6 py-3 bg-white text-blue-600 rounded-lg font-medium hover:bg-white/90 transition-colors"
+          >
+            登录
+          </button>
+        </form>
+
+        <div class="mt-6 text-center">
+          <a href="/" class="text-white/80 hover:text-white transition-colors">
+            返回首页
+          </a>
+        </div>
+      </div>
+    </div>
+  </div>
+</BaseLayout>
+
+<script>
+  // 加载验证码
+  async function loadCaptcha() {
+    try {
+      const response = await fetch('/api/captcha');
+      const data = await response.json();
+      
+      const captchaImage = document.getElementById('captcha-image');
+      const captchaSession = document.getElementById('captcha-session');
+      
+      if (captchaImage && captchaSession) {
+        captchaImage.innerHTML = data.svg;
+        captchaSession.value = data.sessionId;
+      }
+    } catch (error) {
+      console.error('Error loading captcha:', error);
+    }
+  }
+
+  // 页面加载时加载验证码
+  loadCaptcha();
+
+  // 刷新验证码按钮
+  document.getElementById('refresh-captcha')?.addEventListener('click', loadCaptcha);
+</script>
+
+<style>
+  /* 网格背景 */
+  .bg-grid-white {
+    mask-image: linear-gradient(to bottom, transparent, black, transparent);
+  }
+  .bg-grid-12 {
+    background-image: 
+      linear-gradient(to right, rgb(255 255 255 / 0.05) 1px, transparent 1px),
+      linear-gradient(to bottom, rgb(255 255 255 / 0.05) 1px, transparent 1px);
+    background-size: 24px 24px;
+  }
+
+  /* 动画 */
+  .animate-fade-in {
+    animation: fadeIn 0.8s ease-out forwards;
+  }
+
+  @keyframes fadeIn {
+    from {
+      opacity: 0;
+      transform: translateY(20px);
+    }
+    to {
+      opacity: 1;
+      transform: translateY(0);
+    }
+  }
+
+  /* 输入框样式覆盖 */
+  input:-webkit-autofill,
+  input:-webkit-autofill:hover,
+  input:-webkit-autofill:focus {
+    -webkit-text-fill-color: white;
+    -webkit-box-shadow: 0 0 0px 1000px rgba(255, 255, 255, 0.1) inset;
+    transition: background-color 5000s ease-in-out 0s;
+  }
+
+  /* 响应式调整 */
+  @media (max-width: 768px) {
+    .max-w-md {
+      margin-left: 1rem;
+      margin-right: 1rem;
+    }
+  }
+</style> 

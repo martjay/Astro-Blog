@@ -1,0 +1,494 @@
+import BaseLayout from '../../layouts/BaseLayout.astro';
+import { requireAuth } from '../../middleware/auth';
+import { posts } from '../../lib/posts';
+import { comments } from '../../lib/db';
+import { categories } from '../../lib/categories';
+
+// 验证管理员身份
+await requireAuth(Astro);
+
+// 获取统计数据
+const allPosts = await posts.getAll(true);
+const publishedPosts = allPosts.filter(post => !post.data.draft);
+const draftPosts = allPosts.filter(post => post.data.draft);
+
+// 评论统计
+const commentStats = {
+  total: db.prepare('SELECT COUNT(*) as count FROM comments').get().count,
+  approved: db.prepare("SELECT COUNT(*) as count FROM comments WHERE status = 'approved'").get().count,
+  pending: db.prepare("SELECT COUNT(*) as count FROM comments WHERE status = 'pending'").get().count,
+  spam: db.prepare("SELECT COUNT(*) as count FROM comments WHERE status = 'spam'").get().count,
+  
+  // 最近30天的评论趋势
+  trend: db.prepare(`
+    SELECT date(created_at) as date, COUNT(*) as count 
+    FROM comments 
+    WHERE created_at > datetime('now', '-30 days')
+    GROUP BY date(created_at)
+    ORDER BY date
+  `).all(),
+
+  // 评论最多的文章
+  topPosts: db.prepare(`
+    SELECT post_slug, COUNT(*) as count 
+    FROM comments 
+    WHERE status = 'approved'
+    GROUP BY post_slug 
+    ORDER BY count DESC 
+    LIMIT 5
+  `).all(),
+
+  // 最活跃的评论者
+  topCommenters: db.prepare(`
+    SELECT author, COUNT(*) as count 
+    FROM comments 
+    WHERE status = 'approved'
+    GROUP BY author 
+    ORDER BY count DESC 
+    LIMIT 5
+  `).all(),
+
+  // 评论时间分布
+  timeDistribution: db.prepare(`
+    SELECT 
+      CASE 
+        WHEN strftime('%H', created_at) BETWEEN '00' AND '05' THEN '凌晨'
+        WHEN strftime('%H', created_at) BETWEEN '06' AND '11' THEN '上午'
+        WHEN strftime('%H', created_at) BETWEEN '12' AND '17' THEN '下午'
+        ELSE '晚上'
+      END as period,
+      COUNT(*) as count
+    FROM comments
+    GROUP BY period
+    ORDER BY count DESC
+  `).all()
+};
+
+// 文章统计
+const postStats = {
+  total: allPosts.length,
+  published: publishedPosts.length,
+  draft: draftPosts.length,
+  
+  // 最近30天的发布趋势
+  trend: publishedPosts
+    .filter(post => {
+      const date = post.data.pubDate;
+      const thirtyDaysAgo = new Date();
+      thirtyDaysAgo.setDate(thirtyDaysAgo.getDate() - 30);
+      return date >= thirtyDaysAgo;
+    })
+    .reduce((acc, post) => {
+      const date = post.data.pubDate.toISOString().split('T')[0];
+      acc[date] = (acc[date] || 0) + 1;
+      return acc;
+    }, {} as Record<string, number>),
+
+  // 分类统计
+  categories: categories.getAll().map(cat => ({
+    name: cat.name,
+    count: publishedPosts.filter(post => post.data.category === cat.slug).length
+  })),
+
+  // 标签统计
+  tags: [...new Set(publishedPosts.flatMap(post => post.data.tags))]
+    .map(tag => ({
+      name: tag,
+      count: publishedPosts.filter(post => post.data.tags.includes(tag)).length
+    }))
+    .sort((a, b) => b.count - a.count)
+    .slice(0, 10)
+};
+
+// 访问统计（示例数据，实际应该从数据库获取）
+const viewStats = {
+  total: 10000,
+  today: 150,
+  week: 1200,
+  month: 5000,
+  
+  // 最近30天的访问趋势
+  trend: Array.from({ length: 30 }, (_, i) => {
+    const date = new Date();
+    date.setDate(date.getDate() - i);
+    return {
+      date: date.toISOString().split('T')[0],
+      count: Math.floor(Math.random() * 200 + 100) // 示例数据
+    };
+  }).reverse()
+};
+
+<BaseLayout title="统计分析">
+  <!-- Hero Section -->
+  <section class="relative overflow-hidden bg-gradient-to-br from-blue-600 to-purple-700 dark:from-blue-900 dark:to-purple-900">
+    <div class="absolute inset-0">
+      <div class="absolute inset-0 bg-gradient-to-br from-blue-600/90 to-purple-700/90 dark:from-blue-900/90 dark:to-purple-900/90"></div>
+      <div class="absolute inset-0 bg-grid-white/[0.05] bg-grid-12"></div>
+    </div>
+    <div class="container relative mx-auto px-4 py-12">
+      <div class="max-w-4xl mx-auto">
+        <div class="flex flex-col md:flex-row justify-between items-center gap-6">
+          <div>
+            <h1 class="text-3xl md:text-4xl font-bold text-white mb-2 animate-fade-in">
+              统计分析
+            </h1>
+            <p class="text-white/80 animate-fade-in animation-delay-200">
+              数据驱动，洞察网站运营状况
+            </p>
+          </div>
+          <div class="flex flex-wrap gap-4 animate-fade-in animation-delay-300">
+            <a
+              href="/admin/posts"
+              class="px-6 py-3 bg-white/10 text-white rounded-full font-medium hover:bg-white/20 transition-colors"
+            >
+              文章管理
+            </a>
+            <a
+              href="/admin/comments"
+              class="px-6 py-3 bg-white/10 text-white rounded-full font-medium hover:bg-white/20 transition-colors"
+            >
+              评论管理
+            </a>
+          </div>
+        </div>
+      </div>
+    </div>
+  </section>
+
+  <!-- Content Section -->
+  <section class="py-12 bg-gray-50 dark:bg-gray-900">
+    <div class="container mx-auto px-4">
+      <div class="max-w-7xl mx-auto">
+        <!-- 概览卡片 -->
+        <div class="grid gap-6 md:grid-cols-2 lg:grid-cols-4 mb-12 animate-fade-in">
+          <div class="bg-white dark:bg-gray-800 rounded-xl shadow-lg p-6">
+            <div class="flex items-center gap-4">
+              <div class="w-12 h-12 rounded-full bg-blue-500/10 flex items-center justify-center">
+                <svg class="w-6 h-6 text-blue-500" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                  <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M9 12h6m-6 4h6m2 5H7a2 2 0 01-2-2V5a2 2 0 012-2h5.586a1 1 0 01.707.293l5.414 5.414a1 1 0 01.293.707V19a2 2 0 01-2 2z"></path>
+                </svg>
+              </div>
+              <div>
+                <h3 class="text-lg font-bold">文章总数</h3>
+                <p class="text-3xl font-bold gradient-text">{postStats.total}</p>
+              </div>
+            </div>
+            <div class="mt-4 flex gap-4 text-sm">
+              <span class="text-green-500">{postStats.published} 已发布</span>
+              <span class="text-yellow-500">{postStats.draft} 草稿</span>
+            </div>
+          </div>
+
+          <div class="bg-white dark:bg-gray-800 rounded-xl shadow-lg p-6">
+            <div class="flex items-center gap-4">
+              <div class="w-12 h-12 rounded-full bg-purple-500/10 flex items-center justify-center">
+                <svg class="w-6 h-6 text-purple-500" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                  <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M8 10h.01M12 10h.01M16 10h.01M9 16H5a2 2 0 01-2-2V6a2 2 0 012-2h14a2 2 0 012 2v8a2 2 0 01-2 2h-5l-5 5v-5z"></path>
+                </svg>
+              </div>
+              <div>
+                <h3 class="text-lg font-bold">评论总数</h3>
+                <p class="text-3xl font-bold gradient-text">{commentStats.total}</p>
+              </div>
+            </div>
+            <div class="mt-4 flex gap-4 text-sm">
+              <span class="text-green-500">{commentStats.approved} 已通过</span>
+              <span class="text-yellow-500">{commentStats.pending} 待审核</span>
+            </div>
+          </div>
+
+          <div class="bg-white dark:bg-gray-800 rounded-xl shadow-lg p-6">
+            <div class="flex items-center gap-4">
+              <div class="w-12 h-12 rounded-full bg-green-500/10 flex items-center justify-center">
+                <svg class="w-6 h-6 text-green-500" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                  <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M15 12a3 3 0 11-6 0 3 3 0 016 0z"></path>
+                  <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M2.458 12C3.732 7.943 7.523 5 12 5c4.478 0 8.268 2.943 9.542 7-1.274 4.057-5.064 7-9.542 7-4.477 0-8.268-2.943-9.542-7z"></path>
+                </svg>
+              </div>
+              <div>
+                <h3 class="text-lg font-bold">访问总数</h3>
+                <p class="text-3xl font-bold gradient-text">{viewStats.total}</p>
+              </div>
+            </div>
+            <div class="mt-4 flex gap-4 text-sm">
+              <span class="text-blue-500">今日 {viewStats.today}</span>
+              <span class="text-purple-500">本周 {viewStats.week}</span>
+            </div>
+          </div>
+
+          <div class="bg-white dark:bg-gray-800 rounded-xl shadow-lg p-6">
+            <div class="flex items-center gap-4">
+              <div class="w-12 h-12 rounded-full bg-red-500/10 flex items-center justify-center">
+                <svg class="w-6 h-6 text-red-500" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                  <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M13 7h8m0 0v8m0-8l-8 8-4-4-6 6"></path>
+                </svg>
+              </div>
+              <div>
+                <h3 class="text-lg font-bold">转化率</h3>
+                <p class="text-3xl font-bold gradient-text">2.5%</p>
+              </div>
+            </div>
+            <div class="mt-4 flex gap-4 text-sm">
+              <span class="text-green-500">↑ 0.5% 环比</span>
+              <span class="text-blue-500">↑ 1.2% 同比</span>
+            </div>
+          </div>
+        </div>
+
+        <!-- 趋势图表 -->
+        <div class="grid gap-6 lg:grid-cols-2 mb-12">
+          <!-- 访问趋势 -->
+          <div class="bg-white dark:bg-gray-800 rounded-xl shadow-lg p-6 animate-fade-in animation-delay-200">
+            <h3 class="text-xl font-bold gradient-text mb-6">访问趋势</h3>
+            <canvas id="viewTrendChart" class="w-full h-[300px]"></canvas>
+          </div>
+
+          <!-- 评论趋势 -->
+          <div class="bg-white dark:bg-gray-800 rounded-xl shadow-lg p-6 animate-fade-in animation-delay-300">
+            <h3 class="text-xl font-bold gradient-text mb-6">评论趋势</h3>
+            <canvas id="commentTrendChart" class="w-full h-[300px]"></canvas>
+          </div>
+        </div>
+
+        <!-- 详细统计 -->
+        <div class="grid gap-6 lg:grid-cols-2">
+          <!-- 评论统计 -->
+          <div class="space-y-6 animate-fade-in animation-delay-400">
+            <!-- 评论时间分布 -->
+            <div class="bg-white dark:bg-gray-800 rounded-xl shadow-lg p-6">
+              <h3 class="text-xl font-bold gradient-text mb-6">评论时间分布</h3>
+              <canvas id="commentTimeChart" class="w-full h-[300px]"></canvas>
+            </div>
+
+            <!-- 热门评论者 -->
+            <div class="bg-white dark:bg-gray-800 rounded-xl shadow-lg p-6">
+              <h3 class="text-xl font-bold gradient-text mb-6">活跃评论者</h3>
+              <div class="space-y-4">
+                {commentStats.topCommenters.map((commenter, index) => (
+                  <div class="flex items-center gap-4">
+                    <div class="w-8 h-8 rounded-full bg-gradient-to-br from-blue-500 to-purple-600 flex items-center justify-center text-white font-bold">
+                      {index + 1}
+                    </div>
+                    <div class="flex-grow">
+                      <div class="flex justify-between items-center mb-1">
+                        <span class="font-medium">{commenter.author}</span>
+                        <span class="text-sm text-gray-500">{commenter.count} 条评论</span>
+                      </div>
+                      <div class="w-full bg-gray-200 dark:bg-gray-700 rounded-full h-2">
+                        <div
+                          class="bg-gradient-to-r from-blue-500 to-purple-600 h-2 rounded-full"
+                          style={`width: ${(commenter.count / commentStats.topCommenters[0].count) * 100}%`}
+                        ></div>
+                      </div>
+                    </div>
+                  </div>
+                ))}
+              </div>
+            </div>
+          </div>
+
+          <!-- 文章统计 -->
+          <div class="space-y-6 animate-fade-in animation-delay-500">
+            <!-- 分类统计 -->
+            <div class="bg-white dark:bg-gray-800 rounded-xl shadow-lg p-6">
+              <h3 class="text-xl font-bold gradient-text mb-6">分类统计</h3>
+              <canvas id="categoryChart" class="w-full h-[300px]"></canvas>
+            </div>
+
+            <!-- 标签统计 -->
+            <div class="bg-white dark:bg-gray-800 rounded-xl shadow-lg p-6">
+              <h3 class="text-xl font-bold gradient-text mb-6">热门标签</h3>
+              <div class="flex flex-wrap gap-2">
+                {postStats.tags.map(tag => (
+                  <div
+                    class="px-3 py-1 rounded-full text-sm"
+                    style={`font-size: ${Math.max(0.8, Math.min(1.5, tag.count / Math.max(...postStats.tags.map(t => t.count)) + 0.8))}rem; background: linear-gradient(to right, rgb(59, 130, 246, ${Math.max(0.2, tag.count / Math.max(...postStats.tags.map(t => t.count)))}) 0%, rgb(147, 51, 234, ${Math.max(0.2, tag.count / Math.max(...postStats.tags.map(t => t.count)))}) 100%);`}
+                  >
+                    #{tag.name}
+                    <span class="ml-1 text-xs">({tag.count})</span>
+                  </div>
+                ))}
+              </div>
+            </div>
+          </div>
+        </div>
+      </div>
+    </div>
+  </section>
+</BaseLayout>
+
+<script>
+  import Chart from 'chart.js/auto';
+
+  // 设置全局样式
+  Chart.defaults.color = document.documentElement.classList.contains('dark') ? '#9ca3af' : '#4b5563';
+  Chart.defaults.borderColor = document.documentElement.classList.contains('dark') ? '#374151' : '#e5e7eb';
+
+  // 访问趋势图
+  new Chart(document.getElementById('viewTrendChart'), {
+    type: 'line',
+    data: {
+      labels: {viewStats.trend.map(item => item.date)},
+      datasets: [{
+        label: '访问量',
+        data: {viewStats.trend.map(item => item.count)},
+        borderColor: '#3b82f6',
+        backgroundColor: 'rgba(59, 130, 246, 0.1)',
+        tension: 0.4,
+        fill: true
+      }]
+    },
+    options: {
+      responsive: true,
+      plugins: {
+        legend: {
+          display: false
+        }
+      },
+      scales: {
+        y: {
+          beginAtZero: true
+        }
+      }
+    }
+  });
+
+  // 评论趋势图
+  new Chart(document.getElementById('commentTrendChart'), {
+    type: 'line',
+    data: {
+      labels: {commentStats.trend.map(item => item.date)},
+      datasets: [{
+        label: '评论数',
+        data: {commentStats.trend.map(item => item.count)},
+        borderColor: '#8b5cf6',
+        backgroundColor: 'rgba(139, 92, 246, 0.1)',
+        tension: 0.4,
+        fill: true
+      }]
+    },
+    options: {
+      responsive: true,
+      plugins: {
+        legend: {
+          display: false
+        }
+      },
+      scales: {
+        y: {
+          beginAtZero: true
+        }
+      }
+    }
+  });
+
+  // 评论时间分布图
+  new Chart(document.getElementById('commentTimeChart'), {
+    type: 'doughnut',
+    data: {
+      labels: {commentStats.timeDistribution.map(item => item.period)},
+      datasets: [{
+        data: {commentStats.timeDistribution.map(item => item.count)},
+        backgroundColor: [
+          '#3b82f6',
+          '#8b5cf6',
+          '#ec4899',
+          '#f59e0b'
+        ]
+      }]
+    },
+    options: {
+      responsive: true,
+      plugins: {
+        legend: {
+          position: 'right'
+        }
+      }
+    }
+  });
+
+  // 分类统计图
+  new Chart(document.getElementById('categoryChart'), {
+    type: 'bar',
+    data: {
+      labels: {postStats.categories.map(cat => cat.name)},
+      datasets: [{
+        label: '文章数',
+        data: {postStats.categories.map(cat => cat.count)},
+        backgroundColor: 'rgba(59, 130, 246, 0.8)',
+        borderRadius: 4
+      }]
+    },
+    options: {
+      responsive: true,
+      plugins: {
+        legend: {
+          display: false
+        }
+      },
+      scales: {
+        y: {
+          beginAtZero: true
+        }
+      }
+    }
+  });
+</script>
+
+<style>
+  /* 网格背景 */
+  .bg-grid-white {
+    mask-image: linear-gradient(to bottom, transparent, black, transparent);
+  }
+  .bg-grid-12 {
+    background-image: 
+      linear-gradient(to right, rgb(255 255 255 / 0.05) 1px, transparent 1px),
+      linear-gradient(to bottom, rgb(255 255 255 / 0.05) 1px, transparent 1px);
+    background-size: 24px 24px;
+  }
+
+  /* 动画 */
+  .animate-fade-in {
+    animation: fadeIn 0.8s ease-out forwards;
+  }
+
+  .animation-delay-200 {
+    animation-delay: 0.2s;
+  }
+
+  .animation-delay-300 {
+    animation-delay: 0.3s;
+  }
+
+  .animation-delay-400 {
+    animation-delay: 0.4s;
+  }
+
+  .animation-delay-500 {
+    animation-delay: 0.5s;
+  }
+
+  @keyframes fadeIn {
+    from {
+      opacity: 0;
+      transform: translateY(20px);
+    }
+    to {
+      opacity: 1;
+      transform: translateY(0);
+    }
+  }
+
+  /* 渐变文本 */
+  .gradient-text {
+    @apply bg-clip-text text-transparent bg-gradient-to-r from-blue-500 to-purple-600;
+  }
+
+  /* 响应式调整 */
+  @media (max-width: 768px) {
+    .container {
+      padding-left: 1rem;
+      padding-right: 1rem;
+    }
+  }
+</style> 

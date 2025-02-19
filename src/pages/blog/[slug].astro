@@ -1,0 +1,643 @@
+---
+// 设置为服务器端渲染
+export const prerender = false;
+
+import { getCollection } from 'astro:content';
+import BaseLayout from '../../layouts/BaseLayout.astro';
+import { posts } from '../../lib/posts';
+import { comments } from '../../lib/db';
+import TableOfContents from '../../components/TableOfContents.astro';
+import Comments from '../../components/Comments.astro';
+import 'highlight.js/styles/atom-one-dark.css';
+import PostCard from '../../components/PostCard.astro';
+
+const { slug } = Astro.params;
+const allPosts = await getCollection('blog');
+const post = allPosts.find(p => p.slug === slug);
+
+if (!post) {
+  return Astro.redirect('/404');
+}
+
+// 渲染文章内容
+const { Content, headings } = await post.render();
+
+// 获取文章的统计信息
+const views = posts.getViews(post.slug);
+const likes = posts.getLikes(post.slug);
+
+// 增加访问量
+posts.incrementViews(post.slug);
+
+// 获取评论数
+const commentCount = comments.getAll(post.slug).length;
+
+// 计算阅读时间（假设每分钟阅读300字）
+const wordCount = post.body.replace(/\s/g, '').length;
+const readingTime = Math.ceil(wordCount / 300);
+
+// 获取相关文章
+const relatedPosts = allPosts
+  .filter(p => p.slug !== post.slug && p.data.tags.some(tag => post.data.tags.includes(tag)))
+  .slice(0, 3);
+---
+
+<BaseLayout title={post.data.title}>
+  <!-- Hero Section -->
+  <section class="relative overflow-hidden bg-gradient-to-br from-blue-600 to-purple-700 dark:from-blue-900 dark:to-purple-900">
+    <div class="absolute inset-0">
+      <div class="absolute inset-0 bg-gradient-to-br from-blue-600/90 to-purple-700/90 dark:from-blue-900/90 dark:to-purple-900/90"></div>
+      <div class="absolute inset-0 bg-grid-white/[0.05] bg-grid-12"></div>
+    </div>
+    <div class="container relative mx-auto px-4 py-16">
+      <div class="max-w-3xl mx-auto text-center">
+        <h1 class="text-4xl md:text-5xl font-bold text-white mb-6 animate-fade-in break-words">
+          {post.data.title}
+        </h1>
+        <p class="text-xl text-white/80 mb-8 animate-fade-in animation-delay-200 break-words">
+          {post.data.description}
+        </p>
+        <div class="flex flex-wrap justify-center gap-6 text-white/80 text-sm animate-fade-in animation-delay-300">
+          <time datetime={post.data.pubDate.toISOString()}>
+            {post.data.pubDate.toLocaleDateString('zh-CN')}
+          </time>
+          <span>阅读时间：{readingTime} 分钟</span>
+          <span>浏览：{views}</span>
+          <span>点赞：{likes}</span>
+          <span>评论：{commentCount}</span>
+        </div>
+        {post.data.tags.length > 0 && (
+          <div class="flex flex-wrap justify-center gap-3 mt-6 animate-fade-in animation-delay-400">
+            {post.data.tags.map(tag => (
+              <a
+                href={`/tags/${tag}`}
+                class="px-3 py-1 bg-white/10 backdrop-blur-sm rounded-full text-white/90 text-sm hover:bg-white/20 transition-colors"
+              >
+                #{tag}
+              </a>
+            ))}
+          </div>
+        )}
+      </div>
+    </div>
+  </section>
+
+  <!-- Content Section -->
+  <section class="py-16 bg-gray-50 dark:bg-gray-900">
+    <div class="container mx-auto px-4">
+      <div class="grid grid-cols-1 lg:grid-cols-4 gap-8">
+        <!-- 文章内容 -->
+        <article class="lg:col-span-3">
+          <div class="prose dark:prose-invert max-w-none">
+            <Content />
+          </div>
+
+          <!-- 文章标签 -->
+          <div class="flex flex-wrap gap-2 mt-8">
+            {post.data.tags.map(tag => (
+              <a
+                href={`/tags/${tag}`}
+                class="px-3 py-1 bg-gray-100 dark:bg-gray-800 rounded-full hover:bg-gray-200 dark:hover:bg-gray-700 transition-colors"
+              >
+                #{tag}
+              </a>
+            ))}
+          </div>
+
+          <!-- 点赞按钮 -->
+          <div class="flex justify-center mt-12">
+            <button
+              id="like-button"
+              class="px-6 py-3 bg-red-500 text-white rounded-full hover:bg-red-600 flex items-center gap-2 transition-colors"
+            >
+              <svg class="w-5 h-5" viewBox="0 0 20 20" fill="currentColor">
+                <path d="M2 10.5a1.5 1.5 0 113 0v6a1.5 1.5 0 01-3 0v-6zM6 10.333v5.43a2 2 0 001.106 1.79l.05.025A4 4 0 008.943 18h5.416a2 2 0 001.962-1.608l1.2-6A2 2 0 0015.56 8H12V4a2 2 0 00-2-2 1 1 0 00-1 1v.667a4 4 0 01-.8 2.4L6.8 7.933a4 4 0 00-.8 2.4z" />
+              </svg>
+              <span>点赞</span>
+              <span id="like-count">{likes}</span>
+            </button>
+          </div>
+
+          <!-- 评论区 -->
+          <Comments post_slug={post.slug} className="mt-12 pt-8 border-t dark:border-gray-700" />
+
+          <!-- 相关文章 -->
+          {relatedPosts.length > 0 && (
+            <div class="max-w-4xl mx-auto mt-12 pt-8 border-t dark:border-gray-700">
+              <h2 class="text-2xl font-bold mb-6">相关文章</h2>
+              <div class="grid gap-6 md:grid-cols-3">
+                {relatedPosts.map(related => (
+                  <PostCard post={related} />
+                ))}
+              </div>
+            </div>
+          )}
+        </article>
+
+        <!-- 侧边栏 -->
+        <aside class="lg:col-span-1">
+          <div class="sticky top-24">
+            <div class="bg-white dark:bg-gray-800 rounded-xl shadow-lg p-6">
+              <h2 class="text-lg font-bold mb-4">目录</h2>
+              <TableOfContents headings={headings} />
+            </div>
+          </div>
+        </aside>
+      </div>
+    </div>
+  </section>
+
+  <!-- 图片查看器 -->
+  <div id="image-viewer" class="fixed inset-0 z-[9999] bg-black/95 hidden items-center justify-center">
+    <!-- 关闭按钮 -->
+    <button id="close-viewer" class="absolute top-4 right-4 text-white hover:text-gray-300">
+      <svg class="w-8 h-8" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+        <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M6 18L18 6M6 6l12 12" />
+      </svg>
+    </button>
+
+    <!-- 右侧导航栏 -->
+    <div class="absolute right-4 top-1/2 -translate-y-1/2 flex flex-col gap-4">
+      <button id="prev-image" class="text-white hover:text-gray-300 hidden bg-black/20 hover:bg-black/40 p-2 rounded-lg backdrop-blur-sm transition-all">
+        <svg class="w-8 h-8" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+          <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M5 15l7-7 7 7" />
+        </svg>
+      </button>
+      <button id="next-image" class="text-white hover:text-gray-300 hidden bg-black/20 hover:bg-black/40 p-2 rounded-lg backdrop-blur-sm transition-all">
+        <svg class="w-8 h-8" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+          <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M19 9l-7 7-7-7" />
+        </svg>
+      </button>
+    </div>
+
+    <!-- 图片容器 -->
+    <div class="max-w-[calc(100vw-120px)] max-h-[90vh] relative">
+      <img id="viewer-image" class="max-w-full max-h-[90vh] object-contain" src="" alt="" />
+      <!-- 图片计数器 -->
+      <div id="image-counter" class="absolute bottom-4 left-1/2 -translate-x-1/2 text-white/80 text-sm bg-black/20 px-3 py-1 rounded-full backdrop-blur-sm">
+        <span id="current-index">1</span> / <span id="total-images">1</span>
+      </div>
+    </div>
+  </div>
+</BaseLayout>
+
+<script>
+  import hljs from 'highlight.js/lib/core';
+  import javascript from 'highlight.js/lib/languages/javascript';
+  import typescript from 'highlight.js/lib/languages/typescript';
+  import xml from 'highlight.js/lib/languages/xml';
+  import css from 'highlight.js/lib/languages/css';
+  import python from 'highlight.js/lib/languages/python';
+  import java from 'highlight.js/lib/languages/java';
+  import sql from 'highlight.js/lib/languages/sql';
+  import json from 'highlight.js/lib/languages/json';
+  import bash from 'highlight.js/lib/languages/bash';
+  import markdown from 'highlight.js/lib/languages/markdown';
+  import plaintext from 'highlight.js/lib/languages/plaintext';
+  import Clipboard from 'clipboard';
+
+  // 注册语言
+  hljs.registerLanguage('javascript', javascript);
+  hljs.registerLanguage('js', javascript);
+  hljs.registerLanguage('typescript', typescript);
+  hljs.registerLanguage('ts', typescript);
+  hljs.registerLanguage('xml', xml);
+  hljs.registerLanguage('html', xml);
+  hljs.registerLanguage('markup', xml);
+  hljs.registerLanguage('css', css);
+  hljs.registerLanguage('python', python);
+  hljs.registerLanguage('py', python);
+  hljs.registerLanguage('java', java);
+  hljs.registerLanguage('sql', sql);
+  hljs.registerLanguage('json', json);
+  hljs.registerLanguage('bash', bash);
+  hljs.registerLanguage('sh', bash);
+  hljs.registerLanguage('shell', bash);
+  hljs.registerLanguage('markdown', markdown);
+  hljs.registerLanguage('md', markdown);
+  hljs.registerLanguage('plaintext', plaintext);
+  hljs.registerLanguage('text', plaintext);
+
+  document.addEventListener('astro:page-load', () => {
+    // 代码高亮
+    document.querySelectorAll('pre code').forEach((block) => {
+      const language = block.className.replace('language-', '');
+      try {
+        hljs.highlightElement(block);
+
+        // 添加复制按钮
+        const pre = block.parentElement;
+        if (pre && !pre.querySelector('.copy-button')) {
+          const button = document.createElement('button');
+          button.className = 'copy-button';
+          button.setAttribute('data-clipboard-text', block.textContent || '');
+          button.innerHTML = `
+            <svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+              <path stroke-linecap="round" stroke-linejoin="round" stroke-width="1.5" d="M8 5H6a2 2 0 00-2 2v12a2 2 0 002 2h10a2 2 0 002-2v-1M8 5a2 2 0 002 2h2a2 2 0 002-2M8 5a2 2 0 012-2h2a2 2 0 012 2m0 0h2a2 2 0 012 2v3m2 4H10m0 0l3-3m-3 3l3 3"></path>
+            </svg>
+          `;
+          pre.appendChild(button);
+        }
+      } catch (error) {
+        console.warn(`Failed to highlight code block with language: ${language}`);
+        // 如果高亮失败，使用 plaintext
+        block.className = 'language-plaintext';
+        hljs.highlightElement(block);
+      }
+    });
+
+    // 初始化复制功能
+    const clipboard = new Clipboard('.copy-button');
+    
+    clipboard.on('success', (e) => {
+      const button = e.trigger;
+      const originalHTML = button.innerHTML;
+      
+      // 显示成功提示
+      button.innerHTML = `
+        <svg class="w-4 h-4 text-emerald-500" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+          <path stroke-linecap="round" stroke-linejoin="round" stroke-width="1.5" d="M5 13l4 4L19 7"></path>
+        </svg>
+      `;
+      
+      // 2秒后恢复原始图标
+      setTimeout(() => {
+        button.innerHTML = originalHTML;
+      }, 2000);
+    });
+
+    clipboard.on('error', () => {
+      alert('复制失败，请手动复制');
+    });
+
+    // 点赞功能
+    const likeButton = document.getElementById('like-button');
+    const likeCount = document.getElementById('like-count');
+
+    likeButton?.addEventListener('click', async () => {
+      try {
+        const response = await fetch('/api/posts/like', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ slug: post.slug })
+        });
+
+        if (response.ok) {
+          const { liked, count } = await response.json();
+          if (likeCount) {
+            likeCount.textContent = count;
+          }
+          likeButton.classList.toggle('bg-red-600', liked);
+        }
+      } catch (error) {
+        console.error('Error:', error);
+      }
+    });
+
+    const viewer = document.getElementById('image-viewer');
+    const viewerImage = document.getElementById('viewer-image');
+    const closeButton = document.getElementById('close-viewer');
+    const prevButton = document.getElementById('prev-image');
+    const nextButton = document.getElementById('next-image');
+    
+    if (!viewer || !viewerImage || !closeButton || !prevButton || !nextButton) return;
+
+    let currentIndex = 0;
+    let images: HTMLImageElement[] = [];
+
+    // 获取文章中的所有图片
+    function getArticleImages() {
+      images = Array.from(document.querySelectorAll('.prose img'));
+      images.forEach((img, index) => {
+        img.style.cursor = 'zoom-in';
+        img.addEventListener('click', () => showImage(index));
+      });
+    }
+
+    // 显示图片
+    function showImage(index: number) {
+      if (index < 0 || index >= images.length) return;
+      
+      currentIndex = index;
+      const img = images[currentIndex];
+      viewerImage.src = img.src;
+      viewerImage.alt = img.alt;
+      
+      viewer.style.display = 'flex';
+      document.body.style.overflow = 'hidden';
+      
+      // 更新导航按钮显示状态
+      prevButton.style.display = currentIndex > 0 ? 'block' : 'none';
+      nextButton.style.display = currentIndex < images.length - 1 ? 'block' : 'none';
+
+      // 更新图片计数器
+      const currentIndexEl = document.getElementById('current-index');
+      const totalImagesEl = document.getElementById('total-images');
+      if (currentIndexEl && totalImagesEl) {
+        currentIndexEl.textContent = (currentIndex + 1).toString();
+        totalImagesEl.textContent = images.length.toString();
+      }
+    }
+
+    // 关闭查看器
+    function closeViewer() {
+      viewer.style.display = 'none';
+      document.body.style.overflow = '';
+      viewerImage.src = '';
+      currentIndex = 0;
+    }
+
+    // 上一张图片
+    function showPrevImage() {
+      if (currentIndex > 0) {
+        showImage(currentIndex - 1);
+      }
+    }
+
+    // 下一张图片
+    function showNextImage() {
+      if (currentIndex < images.length - 1) {
+        showImage(currentIndex + 1);
+      }
+    }
+
+    // 绑定事件
+    closeButton.addEventListener('click', closeViewer);
+    prevButton.addEventListener('click', showPrevImage);
+    nextButton.addEventListener('click', showNextImage);
+    viewer.addEventListener('click', (e) => {
+      if (e.target === viewer) closeViewer();
+    });
+
+    // 键盘快捷键
+    document.addEventListener('keydown', (e) => {
+      if (viewer.style.display === 'flex') {
+        switch (e.key) {
+          case 'Escape':
+            closeViewer();
+            break;
+          case 'ArrowLeft':
+            showPrevImage();
+            break;
+          case 'ArrowRight':
+            showNextImage();
+            break;
+        }
+      }
+    });
+
+    // 初始化
+    getArticleImages();
+  });
+</script>
+
+<style>
+  /* 网格背景 */
+  .bg-grid-white {
+    mask-image: linear-gradient(to bottom, transparent, black, transparent);
+  }
+  .bg-grid-12 {
+    background-image: 
+      linear-gradient(to right, rgb(255 255 255 / 0.05) 1px, transparent 1px),
+      linear-gradient(to bottom, rgb(255 255 255 / 0.05) 1px, transparent 1px);
+    background-size: 24px 24px;
+  }
+
+  /* 动画 */
+  .animate-fade-in {
+    animation: fadeIn 0.8s ease-out forwards;
+  }
+
+  .animation-delay-200 {
+    animation-delay: 0.2s;
+  }
+
+  .animation-delay-300 {
+    animation-delay: 0.3s;
+  }
+
+  .animation-delay-400 {
+    animation-delay: 0.4s;
+  }
+
+  @keyframes fadeIn {
+    from {
+      opacity: 0;
+      transform: translateY(20px);
+    }
+    to {
+      opacity: 1;
+      transform: translateY(0);
+    }
+  }
+
+  /* 渐变文本 */
+  .gradient-text {
+    @apply bg-clip-text text-transparent bg-gradient-to-r from-blue-500 to-purple-600;
+  }
+
+  /* 响应式调整 */
+  @media (max-width: 768px) {
+    .container {
+      padding-left: 1rem;
+      padding-right: 1rem;
+    }
+  }
+
+  /* 文章内容样式优化 */
+  :global(.prose) {
+    @apply max-w-none;
+  }
+
+  :global(.prose a) {
+    @apply text-blue-500 no-underline hover:text-blue-600;
+  }
+
+  :global(.prose img) {
+    @apply rounded-lg shadow-lg mx-auto cursor-zoom-in transition-opacity hover:opacity-90;
+  }
+
+  :global(.prose code) {
+    @apply bg-gray-100 dark:bg-gray-800 px-1.5 py-0.5 rounded text-sm;
+  }
+
+  :global(.prose pre) {
+    @apply relative bg-[#282c34] dark:bg-[#1e222a] rounded-xl shadow-lg overflow-x-auto my-6;
+    padding: 1.25rem !important;
+    padding-top: 2.5rem !important;
+  }
+
+  /* 代码块语言标识 */
+  :global(.prose pre::before) {
+    @apply absolute top-2 left-2 px-2 py-1 text-xs font-medium text-gray-400 bg-black/20 dark:bg-white/5 rounded-md;
+    content: attr(data-language);
+    text-transform: capitalize;
+  }
+
+  /* 代码块复制按钮 */
+  :global(.prose pre .copy-button) {
+    @apply absolute top-2 right-2 w-6 h-6 flex items-center justify-center text-gray-400 hover:text-white bg-black/20 dark:bg-white/5 rounded-md opacity-0 transition-all duration-200 scale-95 hover:scale-100;
+  }
+
+  :global(.prose pre .copy-button svg) {
+    @apply w-3.5 h-3.5;
+  }
+
+  :global(.prose pre:hover .copy-button) {
+    @apply opacity-100;
+  }
+
+  :global(.prose pre .copy-button:hover) {
+    @apply bg-black/30 dark:bg-white/10;
+  }
+
+  :global(.prose pre .copy-button:active) {
+    @apply transform scale-90;
+  }
+
+  :global(.prose .hljs-keyword) {
+    @apply text-[#c678dd];
+  }
+
+  :global(.prose .hljs-string) {
+    @apply text-[#98c379];
+  }
+
+  :global(.prose .hljs-comment) {
+    @apply text-[#7f848e] italic;
+  }
+
+  :global(.prose .hljs-function) {
+    @apply text-[#61afef];
+  }
+
+  :global(.prose .hljs-number) {
+    @apply text-[#d19a66];
+  }
+
+  :global(.prose .hljs-operator) {
+    @apply text-[#56b6c2];
+  }
+
+  :global(.prose .hljs-class) {
+    @apply text-[#e5c07b];
+  }
+
+  :global(.prose .hljs-property) {
+    @apply text-[#e06c75];
+  }
+
+  :global(.prose .hljs-builtin) {
+    @apply text-[#e5c07b];
+  }
+
+  :global(.prose .hljs-variable) {
+    @apply text-[#e06c75];
+  }
+
+  :global(.prose .hljs-params) {
+    @apply text-[#abb2bf];
+  }
+
+  :global(.prose .hljs-tag) {
+    @apply text-[#e06c75];
+  }
+
+  :global(.prose .hljs-attribute) {
+    @apply text-[#98c379];
+  }
+
+  :global(.prose .hljs-attr) {
+    @apply text-[#d19a66];
+  }
+
+  :global(.prose blockquote) {
+    @apply border-l-4 border-blue-500 bg-blue-50 dark:bg-blue-900/20 px-4 py-2 rounded-r-lg;
+  }
+
+  :global(.prose h2) {
+    @apply text-2xl font-bold mt-8 mb-4 pb-2 border-b border-gray-200 dark:border-gray-700;
+  }
+
+  :global(.prose h3) {
+    @apply text-xl font-bold mt-6 mb-3;
+  }
+
+  :global(.prose ul) {
+    @apply list-disc list-inside;
+  }
+
+  :global(.prose ol) {
+    @apply list-decimal list-inside;
+  }
+
+  :global(.prose table) {
+    @apply w-full border-collapse;
+  }
+
+  :global(.prose th),
+  :global(.prose td) {
+    @apply border border-gray-200 dark:border-gray-700 px-4 py-2;
+  }
+
+  :global(.prose th) {
+    @apply bg-gray-50 dark:bg-gray-800;
+  }
+
+  /* 文字换行控制 */
+  :global(.prose *) {
+    @apply break-words;
+  }
+
+  /* PhotoSwipe 样式优化 */
+  :global(.pswp) {
+    --pswp-bg: rgba(0, 0, 0, 0.85);
+    --pswp-placeholder-bg: #222;
+    --pswp-root-z-index: 100000;
+    --pswp-icon-color: #fff;
+    --pswp-icon-color-secondary: rgba(255, 255, 255, 0.75);
+    --pswp-error-text-color: #fff;
+  }
+
+  :global(.pswp__img) {
+    object-fit: contain;
+    max-width: none !important;
+  }
+
+  :global(.pswp__zoom-wrap) {
+    display: flex;
+    align-items: center;
+    justify-content: center;
+  }
+
+  :global(.pswp__ui) {
+    opacity: 1;
+    transition: opacity 0.25s ease;
+  }
+
+  :global(.pswp__ui--hidden) {
+    opacity: 0;
+  }
+
+  :global(.pswp__preloader) {
+    opacity: 0.85;
+  }
+
+  /* 计数器样式 */
+  :global(.pswp__counter) {
+    @apply text-sm opacity-85 mr-2;
+  }
+
+  /* 代码块滚动条 */
+  :global(.prose pre::-webkit-scrollbar) {
+    @apply h-2 w-2;
+  }
+
+  :global(.prose pre::-webkit-scrollbar-track) {
+    @apply bg-transparent;
+  }
+
+  :global(.prose pre::-webkit-scrollbar-thumb) {
+    @apply bg-gray-700/50 dark:bg-gray-600/50 rounded-full hover:bg-gray-600/50 dark:hover:bg-gray-500/50;
+  }
+</style> 

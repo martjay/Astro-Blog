@@ -1,0 +1,51 @@
+import type { CollectionEntry } from 'astro:content';
+import { getCollection } from 'astro:content';
+
+interface Props {
+  currentPost: CollectionEntry<'blog'>;
+  maxPosts?: number;
+}
+
+const { currentPost, maxPosts = 3 } = Astro.props;
+const allPosts = await getCollection('blog');
+
+// 根据标签相似度计算相关文章
+const relatedPosts = allPosts
+  .filter(post => post.id !== currentPost.id)
+  .map(post => {
+    const commonTags = post.data.tags.filter(tag => 
+      currentPost.data.tags.includes(tag)
+    ).length;
+    return { post, commonTags };
+  })
+  .filter(({ commonTags }) => commonTags > 0)
+  .sort((a, b) => b.commonTags - a.commonTags)
+  .slice(0, maxPosts)
+  .map(({ post }) => post);
+
+{relatedPosts.length > 0 && (
+  <div class="mt-12 pt-8 border-t dark:border-gray-700">
+    <h2 class="text-2xl font-bold mb-6">相关文章</h2>
+    <div class="grid gap-6 md:grid-cols-3">
+      {relatedPosts.map(post => (
+        <article class="border dark:border-gray-700 rounded-lg p-4">
+          <h3 class="font-semibold mb-2">
+            <a href={`/blog/${post.slug}`} class="hover:text-blue-500">
+              {post.data.title}
+            </a>
+          </h3>
+          <p class="text-sm text-gray-600 dark:text-gray-400 mb-2">
+            {post.data.description}
+          </p>
+          <div class="flex gap-2 text-sm">
+            {post.data.tags.map(tag => (
+              <a href={`/tags/${tag}`} class="text-blue-500 hover:text-blue-600">
+                #{tag}
+              </a>
+            ))}
+          </div>
+        </article>
+      ))}
+    </div>
+  </div>
+)} 

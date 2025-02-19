@@ -1,0 +1,176 @@
+---
+import BaseLayout from '../../layouts/BaseLayout.astro';
+import { posts } from '../../lib/posts';
+import { comments } from '../../lib/db';
+import Comments from '../../components/Comments.astro';
+
+export async function getStaticPaths() {
+  const allPosts = posts.getAll();
+  return allPosts.map(post => ({
+    params: { slug: post.slug },
+    props: { post }
+  }));
+}
+
+const { post } = Astro.props;
+const relatedPosts = posts.getRelated(post.slug);
+
+// 增加访问量
+posts.incrementViews(post.slug);
+
+// 获取评论数
+const commentCount = comments.getAll(post.slug).length;
+---
+
+<BaseLayout title={post.title}>
+  <article class="container mx-auto px-4 py-8">
+    <!-- 文章头部 -->
+    <header class="mb-8">
+      <h1 class="text-4xl font-bold mb-4">{post.title}</h1>
+      <div class="flex flex-wrap gap-4 text-sm text-gray-500 dark:text-gray-400">
+        <time>
+          {new Date(post.date).toLocaleDateString('zh-CN')}
+        </time>
+        <span>阅读时间：{post.readingTime} 分钟</span>
+        <span>浏览：{post.views}</span>
+        <span>点赞：{post.likes}</span>
+        <span>评论：{commentCount}</span>
+      </div>
+      {post.cover && (
+        <img
+          src={post.cover}
+          alt={post.title}
+          class="w-full h-64 object-cover rounded-lg mt-4"
+        />
+      )}
+    </header>
+
+    <!-- 文章目录 -->
+    {post.toc && (
+      <div class="fixed top-24 right-4 w-64 hidden xl:block">
+        <div class="p-4 bg-white dark:bg-gray-800 rounded-lg shadow">
+          <h2 class="text-lg font-bold mb-2">目录</h2>
+          <div class="toc" set:html={post.toc} />
+        </div>
+      </div>
+    )}
+
+    <!-- 文章内容 -->
+    <div class="prose dark:prose-invert max-w-none mb-8" set:html={post.content} />
+
+    <!-- 文章标签 -->
+    <div class="flex flex-wrap gap-2 mb-8">
+      {post.tags.map(tag => (
+        <a
+          href={`/tags/${tag}`}
+          class="px-3 py-1 bg-gray-100 dark:bg-gray-800 rounded-full hover:bg-gray-200 dark:hover:bg-gray-700"
+        >
+          #{tag}
+        </a>
+      ))}
+    </div>
+
+    <!-- 点赞按钮 -->
+    <div class="flex justify-center mb-8">
+      <button
+        id="like-button"
+        class="px-6 py-3 bg-red-500 text-white rounded-full hover:bg-red-600 flex items-center gap-2"
+      >
+        <svg class="w-5 h-5" viewBox="0 0 20 20" fill="currentColor">
+          <path d="M2 10.5a1.5 1.5 0 113 0v6a1.5 1.5 0 01-3 0v-6zM6 10.333v5.43a2 2 0 001.106 1.79l.05.025A4 4 0 008.943 18h5.416a2 2 0 001.962-1.608l1.2-6A2 2 0 0015.56 8H12V4a2 2 0 00-2-2 1 1 0 00-1 1v.667a4 4 0 01-.8 2.4L6.8 7.933a4 4 0 00-.8 2.4z" />
+        </svg>
+        <span>点赞</span>
+        <span id="like-count">{post.likes}</span>
+      </button>
+    </div>
+
+    <!-- 相关文章 -->
+    {relatedPosts.length > 0 && (
+      <div class="mb-8">
+        <h2 class="text-2xl font-bold mb-4">相关文章</h2>
+        <div class="grid gap-4 md:grid-cols-3">
+          {relatedPosts.map(related => (
+            <a
+              href={`/posts/${related.slug}`}
+              class="p-4 border dark:border-gray-700 rounded-lg hover:border-blue-500 dark:hover:border-blue-400"
+            >
+              <h3 class="font-bold mb-2">{related.title}</h3>
+              <p class="text-sm text-gray-500 dark:text-gray-400">
+                {related.excerpt}
+              </p>
+            </a>
+          ))}
+        </div>
+      </div>
+    )}
+
+    <!-- 评论区 -->
+    <Comments post_slug={post.slug} />
+  </article>
+</BaseLayout>
+
+<script define:vars={{ slug: post.slug }}>
+  // 点赞功能
+  const likeButton = document.getElementById('like-button');
+  const likeCount = document.getElementById('like-count');
+
+  likeButton?.addEventListener('click', async () => {
+    try {
+      const response = await fetch('/api/posts/like', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ slug })
+      });
+
+      if (response.ok) {
+        const { liked, count } = await response.json();
+        if (likeCount) {
+          likeCount.textContent = count;
+        }
+        likeButton.classList.toggle('bg-red-600', liked);
+      }
+    } catch (error) {
+      console.error('Error:', error);
+    }
+  });
+
+  // 目录滚动高亮
+  const observer = new IntersectionObserver(
+    (entries) => {
+      entries.forEach(entry => {
+        if (entry.isIntersecting) {
+          const id = entry.target.id;
+          document.querySelectorAll('.toc a').forEach(link => {
+            link.classList.toggle(
+              'text-blue-500',
+              link.getAttribute('href') === `#${id}`
+            );
+          });
+        }
+      });
+    },
+    { threshold: 0.5 }
+  );
+
+  document.querySelectorAll('h2, h3, h4').forEach(heading => {
+    observer.observe(heading);
+  });
+</script>
+
+<style>
+  .toc a {
+    display: block;
+    padding: 0.25rem 0;
+    color: inherit;
+    text-decoration: none;
+    transition: color 0.2s;
+  }
+
+  .toc a:hover {
+    color: theme(colors.blue.500);
+  }
+
+  .toc ul {
+    padding-left: 1rem;
+  }
+</style> 

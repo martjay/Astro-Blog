@@ -1,0 +1,66 @@
+---
+const { headings } = Astro.props;
+
+type Heading = {
+  depth: number;
+  slug: string;
+  text: string;
+};
+
+function buildToc(headings: Heading[]) {
+  const toc: Heading[] = [];
+  const parentHeadings = new Map();
+  
+  headings.forEach((h) => {
+    const heading = { ...h, subheadings: [] };
+    parentHeadings.set(h.depth, heading);
+    
+    if (h.depth === 2) {
+      toc.push(heading);
+    } else {
+      const parent = parentHeadings.get(h.depth - 1);
+      if (parent) {
+        parent.subheadings.push(heading);
+      }
+    }
+  });
+  
+  return toc;
+}
+
+const toc = buildToc(headings);
+---
+
+<nav class="toc hidden lg:block">
+  <h2 class="text-lg font-semibold mb-4">目录</h2>
+  <ul class="space-y-2">
+    {toc.map((heading) => (
+      <li>
+        <a href={`#${heading.slug}`} class="hover:text-blue-500 transition-colors">
+          {heading.text}
+        </a>
+        {heading.subheadings.length > 0 && (
+          <ul class="ml-4 mt-2 space-y-2">
+            {heading.subheadings.map((subheading) => (
+              <li>
+                <a href={`#${subheading.slug}`} class="hover:text-blue-500 transition-colors">
+                  {subheading.text}
+                </a>
+              </li>
+            ))}
+          </ul>
+        )}
+      </li>
+    ))}
+  </ul>
+</nav>
+
+<style>
+  .toc {
+    position: sticky;
+    top: 2rem;
+    max-height: calc(100vh - 4rem);
+    overflow-y: auto;
+    padding-right: 1rem;
+  }
+</style> 

@@ -1,0 +1,326 @@
+---
+import { comments } from '../lib/db';
+import type { Comment } from '../lib/db';
+import { isAuthenticated } from '../middleware/auth';
+
+interface Props {
+  post_slug: string;
+  className?: string;
+}
+
+const { post_slug, className = "" } = Astro.props;
+const postComments = comments.getAll(post_slug);
+
+// 检查是否是管理员
+const isAdmin = await isAuthenticated(Astro);
+
+// 构建评论树
+function buildCommentTree(comments: Comment[]) {
+  const commentMap = new Map();
+  const roots: Comment[] = [];
+
+  comments.forEach(comment => {
+    commentMap.set(comment.id, { ...comment, replies: [] });
+  });
+
+  comments.forEach(comment => {
+    if (comment.parent_id) {
+      const parent = commentMap.get(comment.parent_id);
+      if (parent) {
+        parent.replies.push(commentMap.get(comment.id));
+      }
+    } else {
+      roots.push(commentMap.get(comment.id));
+    }
+  });
+
+  return roots;
+}
+
+const commentTree = buildCommentTree(postComments);
+
+// 获取违禁昵称和违禁词
+const forbiddenNicknames = comments.getForbiddenNicknames();
+const forbiddenWords = comments.getForbiddenWords();
+---
+
+<div class={`comments ${className}`}>
+  <h3 class="text-xl font-bold mb-6">评论</h3>
+  
+  <form id="comment-form" class="mb-8">
+    <div class="mb-4">
+      <label for="author" class="block text-sm font-medium mb-1">昵称</label>
+      <input
+        type="text"
+        id="author"
+        name="author"
+        required
+        class="w-full px-3 py-2 border dark:border-gray-700 rounded-lg bg-transparent"
+        disabled={isAdmin}
+        value={isAdmin ? 'admin' : ''}
+      />
+      <p class="mt-1 text-sm text-gray-500">
+        {isAdmin ? '管理员身份已锁定' : '请输入昵称，将会保存在本地'}
+      </p>
+    </div>
+    <div class="mb-4">
+      <label for="content" class="block text-sm font-medium mb-1">评论内容</label>
+      <textarea
+        id="content"
+        name="content"
+        required
+        rows="4"
+        class="w-full px-3 py-2 border dark:border-gray-700 rounded-lg bg-transparent"
+      ></textarea>
+    </div>
+    <div class="mb-4">
+      <label for="captcha" class="block text-sm font-medium mb-1">验证码</label>
+      <div class="flex gap-2">
+        <input
+          type="text"
+          id="captcha"
+          name="captcha"
+          required
+          class="flex-grow px-3 py-2 border dark:border-gray-700 rounded-lg bg-transparent"
+          placeholder="请输入验证码"
+          maxlength="4"
+        />
+        <div class="relative">
+          <div id="captcha-image" class="w-30 h-10 border dark:border-gray-700 rounded-lg overflow-hidden">
+            <!-- 验证码图片将在这里显示 -->
+          </div>
+          <button
+            type="button"
+            id="refresh-captcha"
+            class="absolute top-0 right-0 p-1 text-gray-500 hover:text-gray-700"
+            title="刷新验证码"
+          >
+            <svg class="w-4 h-4" viewBox="0 0 20 20" fill="currentColor">
+              <path fill-rule="evenodd" d="M4 2a1 1 0 011 1v2.101a7.002 7.002 0 0111.601 2.566 1 1 0 11-1.885.666A5.002 5.002 0 005.999 7H9a1 1 0 010 2H4a1 1 0 01-1-1V3a1 1 0 011-1zm.008 9.057a1 1 0 011.276.61A5.002 5.002 0 0014.001 13H11a1 1 0 110-2h5a1 1 0 011 1v5a1 1 0 11-2 0v-2.101a7.002 7.002 0 01-11.601-2.566 1 1 0 01.61-1.276z" clip-rule="evenodd" />
+            </svg>
+          </button>
+        </div>
+      </div>
+    </div>
+    <input type="hidden" id="parent-id" name="parent_id" value="" />
+    <input type="hidden" id="captcha-session" name="captcha_session" value="" />
+    <button
+      type="submit"
+      class="px-4 py-2 bg-blue-500 text-white rounded-lg hover:bg-blue-600"
+    >
+      提交评论
+    </button>
+    <button
+      type="button"
+      id="cancel-reply"
+      class="px-4 py-2 ml-2 bg-gray-500 text-white rounded-lg hover:bg-gray-600 hidden"
+    >
+      取消回复
+    </button>
+  </form>
+
+  <div class="space-y-6" id="comments-list">
+    {commentTree.length > 0 ? (
+      commentTree.map(comment => (
+        <article class="border dark:border-gray-700 rounded-lg p-4">
+          <div class="flex justify-between items-start mb-2">
+            <span class="font-medium">{comment.author}</span>
+            <time class="text-sm text-gray-500">
+              {new Date(comment.created_at).toLocaleString('zh-CN')}
+            </time>
+          </div>
+          <p class="text-gray-600 dark:text-gray-400 mb-2">{comment.content}</p>
+          <button
+            class="text-sm text-blue-500 hover:text-blue-600"
+            onclick={`replyTo(${comment.id}, '${comment.author}')`}
+          >
+            回复
+          </button>
+          
+          {comment.replies?.length > 0 && (
+            <div class="ml-8 mt-4 space-y-4">
+              {comment.replies.map(reply => (
+                <article class="border dark:border-gray-700 rounded-lg p-4">
+                  <div class="flex justify-between items-start mb-2">
+                    <div>
+                      <span class="font-medium">{reply.author}</span>
+                      <span class="text-gray-500 text-sm ml-2">
+                        回复 {comment.author}
+                      </span>
+                    </div>
+                    <time class="text-sm text-gray-500">
+                      {new Date(reply.created_at).toLocaleString('zh-CN')}
+                    </time>
+                  </div>
+                  <p class="text-gray-600 dark:text-gray-400 mb-2">{reply.content}</p>
+                  <button
+                    class="text-sm text-blue-500 hover:text-blue-600"
+                    onclick={`replyTo(${reply.id}, '${reply.author}')`}
+                  >
+                    回复
+                  </button>
+                </article>
+              ))}
+            </div>
+          )}
+        </article>
+      ))
+    ) : (
+      <p class="text-gray-500 dark:text-gray-400 text-center py-8">
+        还没有评论，来说两句吧~
+      </p>
+    )}
+  </div>
+
+  <div class="mt-4 text-sm text-gray-500 dark:text-gray-400">
+    评论提交后需要审核才会显示
+  </div>
+</div>
+
+<script define:vars={{ post_slug, isAdmin, forbiddenNicknames, forbiddenWords }}>
+  const form = document.getElementById('comment-form');
+  const authorInput = document.getElementById('author');
+  const parentIdInput = document.getElementById('parent-id');
+  const cancelReplyButton = document.getElementById('cancel-reply');
+  let replyingTo = null;
+  let currentCaptchaSession = '';
+
+  // 从localStorage加载昵称
+  if (!isAdmin && localStorage.getItem('commenter_nickname')) {
+    authorInput.value = localStorage.getItem('commenter_nickname');
+  }
+
+  // 验证昵称是否合法
+  function validateNickname(nickname) {
+    // 检查长度
+    if (nickname.length < 2 || nickname.length > 20) {
+      throw new Error('昵称长度必须在2-20个字符之间');
+    }
+
+    // 检查特殊字符
+    if (!/^[\u4e00-\u9fa5a-zA-Z0-9_-]+$/.test(nickname)) {
+      throw new Error('昵称只能包含中文、英文、数字、下划线和连字符');
+    }
+
+    // 检查违禁昵称
+    for (const { nickname: forbidden } of forbiddenNicknames) {
+      if (nickname.toLowerCase().includes(forbidden.toLowerCase())) {
+        throw new Error('昵称包含违规词汇，请更换');
+      }
+    }
+
+    // 检查违禁词
+    for (const { word } of forbiddenWords) {
+      if (nickname.toLowerCase().includes(word.toLowerCase())) {
+        throw new Error('昵称包含违规词汇，请更换');
+      }
+    }
+
+    return true;
+  }
+
+  // 回复评论函数
+  window.replyTo = function(commentId, authorName) {
+    parentIdInput.value = commentId;
+    replyingTo = authorName;
+    form.querySelector('textarea').placeholder = `回复 ${authorName}`;
+    cancelReplyButton.classList.remove('hidden');
+    form.scrollIntoView({ behavior: 'smooth' });
+  };
+
+  // 取消回复
+  cancelReplyButton?.addEventListener('click', () => {
+    parentIdInput.value = '';
+    form.querySelector('textarea').placeholder = '';
+    cancelReplyButton.classList.add('hidden');
+    replyingTo = null;
+  });
+
+  // 加载验证码
+  async function loadCaptcha() {
+    try {
+      const response = await fetch('/api/captcha');
+      const data = await response.json();
+      
+      const captchaImage = document.getElementById('captcha-image');
+      const captchaSession = document.getElementById('captcha-session');
+      
+      if (captchaImage && captchaSession) {
+        captchaImage.innerHTML = data.svg;
+        captchaSession.value = data.sessionId;
+        currentCaptchaSession = data.sessionId;
+      }
+    } catch (error) {
+      console.error('Error loading captcha:', error);
+    }
+  }
+
+  // 页面加载时加载验证码
+  loadCaptcha();
+
+  // 刷新验证码按钮
+  document.getElementById('refresh-captcha')?.addEventListener('click', loadCaptcha);
+
+  // 提交评论
+  form?.addEventListener('submit', async (e) => {
+    e.preventDefault();
+    const formData = new FormData(e.target);
+    const content = formData.get('content')?.toString().trim();
+    const nickname = isAdmin ? 'admin' : formData.get('author')?.toString().trim();
+
+    if (!isAdmin && !nickname) {
+      alert('请输入昵称');
+      return;
+    }
+
+    if (!content) {
+      alert('请输入评论内容');
+      return;
+    }
+
+    try {
+      // 如果不是管理员，验证昵称
+      if (!isAdmin) {
+        validateNickname(nickname);
+        // 保存昵称到localStorage
+        localStorage.setItem('commenter_nickname', nickname);
+      }
+      
+      const response = await fetch('/api/comments', {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+        },
+        body: JSON.stringify({
+          post_slug,
+          author: nickname,
+          content: content,
+          parent_id: formData.get('parent_id') || null,
+          captcha: formData.get('captcha'),
+          captchaSession: currentCaptchaSession,
+          isAdmin: isAdmin
+        }),
+      });
+
+      const data = await response.json();
+
+      if (response.ok) {
+        alert(data.message || (isAdmin ? '评论已发表' : '评论已提交，等待审核'));
+        location.reload();
+      } else {
+        if (data.error === 'invalid_captcha') {
+          alert('验证码错误，请重试');
+          loadCaptcha(); // 刷新验证码
+        } else {
+          alert(data.error || '评论提交失败，请重试');
+        }
+      }
+    } catch (error) {
+      alert(error.message || '评论提交失败，请重试');
+    }
+  });
+</script>
+
+<style>
+  /* 现有样式保持不变 */
+</style> 

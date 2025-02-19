@@ -1,0 +1,262 @@
+---
+import BaseLayout from './BaseLayout.astro';
+import TableOfContents from '../components/TableOfContents.astro';
+import ReadingProgress from '../components/ReadingProgress.astro';
+import RelatedPosts from '../components/RelatedPosts.astro';
+import Comments from '../components/Comments.astro';
+import type { CollectionEntry } from 'astro:content';
+
+interface Props {
+  post: CollectionEntry<'blog'>;
+}
+
+const { post } = Astro.props;
+const { Content, headings } = await post.render();
+
+// 计算阅读时间
+const WORDS_PER_MINUTE = 200;
+const wordCount = post.body.split(/\s+/g).length;
+const readingTime = Math.ceil(wordCount / WORDS_PER_MINUTE);
+---
+
+<BaseLayout title={post.data.title} description={post.data.description}>
+  <ReadingProgress />
+  <div class="container mx-auto px-4 py-8">
+    <div class="grid grid-cols-1 lg:grid-cols-4 gap-8">
+      <article class="lg:col-span-3 prose dark:prose-invert max-w-none">
+        <h1>{post.data.title}</h1>
+        <div class="flex flex-wrap gap-4 text-gray-500 mb-8">
+          <time datetime={post.data.pubDate.toISOString()}>
+            {post.data.pubDate.toLocaleDateString('zh-CN')}
+          </time>
+          <span>预计阅读时间: {readingTime} 分钟</span>
+          <div class="flex gap-2">
+            {post.data.tags.map(tag => (
+              <a href={`/tags/${tag}`} class="hover:text-blue-500">#{tag}</a>
+            ))}
+          </div>
+        </div>
+        <Content />
+        
+        <RelatedPosts currentPost={post} />
+        <Comments className="mt-12 pt-8 border-t dark:border-gray-700" />
+      </article>
+      
+      <aside class="lg:col-span-1">
+        <div class="sticky top-4">
+          <TableOfContents headings={headings} />
+        </div>
+      </aside>
+    </div>
+  </div>
+
+  <!-- 图片查看器 -->
+  <div id="image-viewer" class="fixed inset-0 z-[9999] bg-black/95 hidden items-center justify-center">
+    <button id="close-viewer" class="absolute top-4 right-4 text-white hover:text-gray-300">
+      <svg class="w-8 h-8" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+        <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M6 18L18 6M6 6l12 12" />
+      </svg>
+    </button>
+    <button id="prev-image" class="absolute left-4 top-1/2 -translate-y-1/2 text-white hover:text-gray-300 hidden">
+      <svg class="w-8 h-8" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+        <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M15 19l-7-7 7-7" />
+      </svg>
+    </button>
+    <button id="next-image" class="absolute right-4 top-1/2 -translate-y-1/2 text-white hover:text-gray-300 hidden">
+      <svg class="w-8 h-8" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+        <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M9 5l7 7-7 7" />
+      </svg>
+    </button>
+    <img id="viewer-image" class="max-w-[90vw] max-h-[90vh] object-contain" src="" alt="" />
+  </div>
+</BaseLayout>
+
+<script>
+  document.addEventListener('astro:page-load', () => {
+    const viewer = document.getElementById('image-viewer');
+    const viewerImage = document.getElementById('viewer-image');
+    const closeButton = document.getElementById('close-viewer');
+    const prevButton = document.getElementById('prev-image');
+    const nextButton = document.getElementById('next-image');
+    
+    if (!viewer || !viewerImage || !closeButton || !prevButton || !nextButton) return;
+
+    let currentIndex = 0;
+    let images: HTMLImageElement[] = [];
+
+    // 获取文章中的所有图片
+    function getArticleImages() {
+      images = Array.from(document.querySelectorAll('.prose img'));
+      images.forEach((img, index) => {
+        img.style.cursor = 'zoom-in';
+        img.addEventListener('click', () => showImage(index));
+      });
+    }
+
+    // 显示图片
+    function showImage(index: number) {
+      if (index < 0 || index >= images.length) return;
+      
+      currentIndex = index;
+      const img = images[currentIndex];
+      viewerImage.src = img.src;
+      viewerImage.alt = img.alt;
+      
+      viewer.style.display = 'flex';
+      document.body.style.overflow = 'hidden';
+      
+      // 更新导航按钮显示状态
+      prevButton.style.display = currentIndex > 0 ? 'block' : 'none';
+      nextButton.style.display = currentIndex < images.length - 1 ? 'block' : 'none';
+    }
+
+    // 关闭查看器
+    function closeViewer() {
+      viewer.style.display = 'none';
+      document.body.style.overflow = '';
+      viewerImage.src = '';
+    }
+
+    // 上一张图片
+    function showPrevImage() {
+      if (currentIndex > 0) {
+        showImage(currentIndex - 1);
+      }
+    }
+
+    // 下一张图片
+    function showNextImage() {
+      if (currentIndex < images.length - 1) {
+        showImage(currentIndex + 1);
+      }
+    }
+
+    // 绑定事件
+    closeButton.addEventListener('click', closeViewer);
+    prevButton.addEventListener('click', showPrevImage);
+    nextButton.addEventListener('click', showNextImage);
+    viewer.addEventListener('click', (e) => {
+      if (e.target === viewer) closeViewer();
+    });
+
+    // 键盘快捷键
+    document.addEventListener('keydown', (e) => {
+      if (viewer.style.display === 'flex') {
+        switch (e.key) {
+          case 'Escape':
+            closeViewer();
+            break;
+          case 'ArrowLeft':
+            showPrevImage();
+            break;
+          case 'ArrowRight':
+            showNextImage();
+            break;
+        }
+      }
+    });
+
+    // 初始化
+    getArticleImages();
+  });
+</script>
+
+<style>
+  :global(.prose) {
+    max-width: none;
+  }
+  :global(.prose a) {
+    color: theme(colors.blue.500);
+    text-decoration: none;
+  }
+  :global(.prose a:hover) {
+    text-decoration: underline;
+  }
+
+  /* 代码块容器样式 */
+  :global(.prose pre) {
+    @apply relative bg-gray-900 dark:bg-gray-800 rounded-lg shadow-lg overflow-x-auto my-6;
+    padding: 1.25rem !important;
+    padding-top: 2.5rem !important;
+  }
+
+  /* 代码块语言标识 */
+  :global(.prose pre::before) {
+    @apply absolute top-2 right-2 px-2 py-1 text-xs font-medium text-gray-400 bg-gray-800/50 dark:bg-gray-700/50 rounded-md;
+    content: attr(data-language);
+  }
+
+  /* 代码块复制按钮 */
+  :global(.prose pre .copy-button) {
+    @apply absolute top-2 right-2 p-1.5 text-gray-400 hover:text-white bg-gray-800/50 dark:bg-gray-700/50 rounded-lg opacity-0 transition-opacity duration-200;
+  }
+
+  :global(.prose pre:hover .copy-button) {
+    @apply opacity-100;
+  }
+
+  /* 代码高亮主题覆盖 */
+  :global(.hljs) {
+    @apply bg-transparent;
+  }
+
+  /* 代码块滚动条样式 */
+  :global(.prose pre::-webkit-scrollbar) {
+    @apply h-2 w-2;
+  }
+
+  :global(.prose pre::-webkit-scrollbar-track) {
+    @apply bg-transparent;
+  }
+
+  :global(.prose pre::-webkit-scrollbar-thumb) {
+    @apply bg-gray-700 dark:bg-gray-600 rounded-full;
+  }
+
+  :global(.prose pre::-webkit-scrollbar-thumb:hover) {
+    @apply bg-gray-600 dark:bg-gray-500;
+  }
+
+  /* 代码高亮颜色 */
+  :global(.prose .hljs-keyword) {
+    @apply text-purple-400;
+  }
+
+  :global(.prose .hljs-string) {
+    @apply text-green-400;
+  }
+
+  :global(.prose .hljs-comment) {
+    @apply text-gray-500;
+  }
+
+  :global(.prose .hljs-function) {
+    @apply text-blue-400;
+  }
+
+  :global(.prose .hljs-number) {
+    @apply text-orange-400;
+  }
+
+  :global(.prose .hljs-operator) {
+    @apply text-yellow-400;
+  }
+
+  :global(.prose .hljs-class) {
+    @apply text-cyan-400;
+  }
+
+  :global(.prose .hljs-property) {
+    @apply text-red-400;
+  }
+
+  /* 行内代码样式 */
+  :global(.prose :not(pre) > code) {
+    @apply px-1.5 py-0.5 rounded text-sm font-normal bg-gray-100 dark:bg-gray-800 border border-gray-200 dark:border-gray-700 text-gray-800 dark:text-gray-200;
+  }
+
+  /* 图片样式 */
+  :global(.prose img) {
+    @apply rounded-lg cursor-zoom-in transition-opacity hover:opacity-90;
+  }
+</style> 

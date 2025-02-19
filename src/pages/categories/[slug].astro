@@ -1,0 +1,130 @@
+---
+import BaseLayout from '../../layouts/BaseLayout.astro';
+import { getCollection } from 'astro:content';
+import { categories } from '../../lib/categories';
+import PostCard from '../../components/PostCard.astro';
+
+export const prerender = true;
+
+export async function getStaticPaths() {
+  const allCategories = categories.getAll();
+  return allCategories.map(category => ({
+    params: { slug: category.slug },
+    props: { category }
+  }));
+}
+
+const { category } = Astro.props;
+const posts = await getCollection('blog');
+const categoryPosts = posts
+  .filter(post => !post.data.draft && post.data.category === category.slug)
+  .sort((a, b) => b.data.pubDate.valueOf() - a.data.pubDate.valueOf());
+
+// 获取子分类
+const childCategories = categories.getAll().filter(cat => cat.parent_id === category.id);
+---
+
+<BaseLayout title={`${category.name} - 文章分类`}>
+  <!-- Hero Section -->
+  <section class="relative overflow-hidden bg-gradient-to-br from-blue-600 to-purple-700 dark:from-blue-900 dark:to-purple-900">
+    <div class="absolute inset-0">
+      <div class="absolute inset-0 bg-gradient-to-br from-blue-600/90 to-purple-700/90 dark:from-blue-900/90 dark:to-purple-900/90"></div>
+      <div class="absolute inset-0 bg-grid-white/[0.05] bg-grid-12"></div>
+    </div>
+    <div class="container relative mx-auto px-4 py-16">
+      <div class="max-w-3xl mx-auto text-center">
+        <h1 class="text-4xl md:text-5xl font-bold text-white mb-6 animate-fade-in">
+          {category.name}
+        </h1>
+        {category.description && (
+          <p class="text-xl text-white/80 mb-8 animate-fade-in animation-delay-200">
+            {category.description}
+          </p>
+        )}
+        
+        {childCategories.length > 0 && (
+          <div class="flex flex-wrap justify-center gap-4 animate-fade-in animation-delay-300">
+            {childCategories.map(child => (
+              <a
+                href={`/categories/${child.slug}`}
+                class="px-4 py-2 bg-white/10 backdrop-blur-sm rounded-full text-white hover:bg-white/20 transition-colors"
+              >
+                {child.name}
+              </a>
+            ))}
+          </div>
+        )}
+      </div>
+    </div>
+  </section>
+
+  <!-- 文章列表 -->
+  <section class="py-16 bg-gray-50 dark:bg-gray-900">
+    <div class="container mx-auto px-4">
+      {categoryPosts.length > 0 ? (
+        <div class="grid gap-8 md:grid-cols-2 lg:grid-cols-3">
+          {categoryPosts.map((post, index) => (
+            <PostCard post={post} featured={index === 0 && categoryPosts.length < 4} />
+          ))}
+        </div>
+      ) : (
+        <div class="text-center py-16">
+          <div class="inline-block p-6 bg-white dark:bg-gray-800 rounded-lg shadow-lg">
+            <svg class="w-16 h-16 mx-auto mb-4 text-gray-400" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+              <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M9.663 17h4.673M12 3v1m6.364 1.636l-.707.707M21 12h-1M4 12H3m3.343-5.657l-.707-.707m2.828 9.9a5 5 0 117.072 0l-.548.547A3.374 3.374 0 0014 18.469V19a2 2 0 11-4 0v-.531c0-.895-.356-1.754-.988-2.386l-.548-.547z"></path>
+            </svg>
+            <h2 class="text-2xl font-bold mb-2">暂无文章</h2>
+            <p class="text-gray-600 dark:text-gray-400">
+              这个分类下还没有任何文章，敬请期待...
+            </p>
+          </div>
+        </div>
+      )}
+    </div>
+  </section>
+</BaseLayout>
+
+<style>
+  /* 网格背景 */
+  .bg-grid-white {
+    mask-image: linear-gradient(to bottom, transparent, black, transparent);
+  }
+  .bg-grid-12 {
+    background-image: 
+      linear-gradient(to right, rgb(255 255 255 / 0.05) 1px, transparent 1px),
+      linear-gradient(to bottom, rgb(255 255 255 / 0.05) 1px, transparent 1px);
+    background-size: 24px 24px;
+  }
+
+  /* 动画 */
+  .animate-fade-in {
+    animation: fadeIn 0.8s ease-out forwards;
+  }
+
+  .animation-delay-200 {
+    animation-delay: 0.2s;
+  }
+
+  .animation-delay-300 {
+    animation-delay: 0.3s;
+  }
+
+  @keyframes fadeIn {
+    from {
+      opacity: 0;
+      transform: translateY(20px);
+    }
+    to {
+      opacity: 1;
+      transform: translateY(0);
+    }
+  }
+
+  /* 响应式调整 */
+  @media (max-width: 768px) {
+    .container {
+      padding-left: 1rem;
+      padding-right: 1rem;
+    }
+  }
+</style> 

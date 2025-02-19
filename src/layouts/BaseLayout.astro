@@ -1,0 +1,95 @@
+---
+import Header from '../components/Header.astro';
+import Footer from '../components/Footer.astro';
+import { ViewTransitions } from 'astro:transitions';
+import ThemeToggle from '../components/ThemeToggle.astro';
+import { settings } from '../lib/settings';
+import '../styles/global.css';
+
+interface Props {
+  title?: string;
+  description?: string;
+}
+
+// 获取网站设置
+const siteSettings = settings.getAll();
+
+// 使用设置或传入的值
+const { 
+  title = siteSettings.siteTitle,
+  description = siteSettings.siteDescription 
+} = Astro.props;
+
+// 构建完整的标题
+const fullTitle = title === siteSettings.siteTitle 
+  ? title 
+  : `${title} - ${siteSettings.siteTitle}`;
+---
+
+<!DOCTYPE html>
+<html lang="zh-CN">
+  <head>
+    <meta charset="UTF-8" />
+    <meta http-equiv="X-UA-Compatible" content="IE=edge" />
+    <meta http-equiv="Content-Type" content="text/html; charset=utf-8" />
+    <meta name="viewport" content="width=device-width" />
+    <link rel="icon" type="image/svg+xml" href="/favicon.svg" />
+    <meta name="generator" content={Astro.generator} />
+    <meta name="description" content={description} />
+    <meta name="keywords" content={siteSettings.siteKeywords} />
+    <meta name="author" content={siteSettings.siteAuthor} />
+    <title>{fullTitle}</title>
+    <ViewTransitions />
+    <script is:inline>
+      // 主题初始化函数
+      function initTheme() {
+        const theme = (() => {
+          if (typeof localStorage !== 'undefined' && localStorage.getItem('theme')) {
+            return localStorage.getItem('theme');
+          }
+          if (window.matchMedia('(prefers-color-scheme: dark)').matches) {
+            return 'dark';
+          }
+          return 'light';
+        })();
+        
+        if (theme === 'dark') {
+          document.documentElement.classList.add('dark');
+        } else {
+          document.documentElement.classList.remove('dark');
+        }
+      }
+
+      // 初始化主题
+      initTheme();
+
+      // 监听主题变化
+      document.addEventListener('astro:after-swap', initTheme);
+    </script>
+    
+    <script>
+      document.addEventListener('astro:page-load', () => {
+        if (!window.Alpine) {
+          import('alpinejs').then(module => {
+            window.Alpine = module.default;
+            window.Alpine.start();
+          });
+        }
+      });
+    </script>
+
+    {/* 插入统计代码 */}
+    {siteSettings.analyticsCode && (
+      <Fragment set:html={siteSettings.analyticsCode} />
+    )}
+  </head>
+  <body class="min-h-screen bg-white dark:bg-gray-900 text-black dark:text-white transition-colors duration-300">
+    <div class="flex flex-col min-h-screen">
+      <Header siteTitle={siteSettings.siteTitle} />
+      <main class="flex-grow container mx-auto px-4">
+        <slot />
+      </main>
+      <Footer siteTitle={siteSettings.siteTitle} icpNumber={siteSettings.icpNumber} />
+    </div>
+  </body>
+</html> 

@@ -1,0 +1,134 @@
+---
+import BaseLayout from '../layouts/BaseLayout.astro';
+import { posts } from '../lib/posts';
+
+const archive = await posts.getArchive();
+---
+
+<BaseLayout title="文章归档">
+  <!-- Hero Section -->
+  <section class="relative overflow-hidden bg-gradient-to-br from-blue-600 to-purple-700 dark:from-blue-900 dark:to-purple-900">
+    <div class="absolute inset-0">
+      <div class="absolute inset-0 bg-gradient-to-br from-blue-600/90 to-purple-700/90 dark:from-blue-900/90 dark:to-purple-900/90"></div>
+      <div class="absolute inset-0 bg-grid-white/[0.05] bg-grid-12"></div>
+    </div>
+    <div class="container relative mx-auto px-4 py-16">
+      <div class="max-w-3xl mx-auto text-center">
+        <h1 class="text-4xl md:text-5xl font-bold text-white mb-6 animate-fade-in">
+          文章归档
+        </h1>
+        <p class="text-xl text-white/80 mb-8 animate-fade-in animation-delay-200">
+          时光荏苒，记录点滴
+        </p>
+      </div>
+    </div>
+  </section>
+
+  <!-- Archive Section -->
+  <section class="py-16 bg-gray-50 dark:bg-gray-900">
+    <div class="container mx-auto px-4">
+      <div class="max-w-4xl mx-auto">
+        {archive.map(({ year, posts }) => (
+          <div class="mb-16 last:mb-0 animate-fade-in">
+            <div class="flex items-center gap-4 mb-8">
+              <h2 class="text-4xl font-bold gradient-text">{year}</h2>
+              <div class="flex-grow border-t border-gray-200 dark:border-gray-700"></div>
+              <span class="text-gray-500 dark:text-gray-400">{posts.length} 篇文章</span>
+            </div>
+            <div class="space-y-6">
+              {posts.map(post => (
+                <article class="group relative pl-8">
+                  <div class="absolute left-0 top-3 w-3 h-3 rounded-full bg-blue-500 group-hover:bg-purple-500 transition-colors"></div>
+                  <div class="absolute left-[5px] top-6 bottom-0 w-0.5 bg-gray-200 dark:bg-gray-700 group-last:hidden"></div>
+                  <div class="p-6 bg-white dark:bg-gray-800 rounded-xl shadow-sm hover:shadow-md transition-shadow">
+                    <div class="flex flex-wrap justify-between items-start gap-4 mb-2">
+                      <h3 class="text-xl font-bold group-hover:text-blue-500 transition-colors">
+                        <a href={`/blog/${post.slug}`}>{post.data.title}</a>
+                      </h3>
+                      <time class="text-sm text-gray-500 dark:text-gray-400 whitespace-nowrap">
+                        {post.data.pubDate.toLocaleDateString('zh-CN')}
+                      </time>
+                    </div>
+                    <p class="text-gray-600 dark:text-gray-400 mb-4 line-clamp-2">
+                      {post.data.description}
+                    </p>
+                    <div class="flex flex-wrap gap-2">
+                      {post.data.tags.map(tag => (
+                        <a
+                          href={`/tags/${tag}`}
+                          class="px-3 py-1 text-sm bg-gray-100 dark:bg-gray-700 rounded-full hover:bg-blue-100 dark:hover:bg-blue-900 transition-colors"
+                        >
+                          #{tag}
+                        </a>
+                      ))}
+                    </div>
+                  </div>
+                </article>
+              ))}
+            </div>
+          </div>
+        ))}
+
+        {archive.length === 0 && (
+          <div class="text-center py-16">
+            <div class="inline-block p-6 bg-white dark:bg-gray-800 rounded-lg shadow-lg">
+              <svg class="w-16 h-16 mx-auto mb-4 text-gray-400" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 6v6m0 0v6m0-6h6m-6 0H6"></path>
+              </svg>
+              <h2 class="text-2xl font-bold mb-2">暂无文章</h2>
+              <p class="text-gray-600 dark:text-gray-400">
+                还没有发布任何文章，开始写作吧...
+              </p>
+            </div>
+          </div>
+        )}
+      </div>
+    </div>
+  </section>
+</BaseLayout>
+
+<style>
+  /* 网格背景 */
+  .bg-grid-white {
+    mask-image: linear-gradient(to bottom, transparent, black, transparent);
+  }
+  .bg-grid-12 {
+    background-image: 
+      linear-gradient(to right, rgb(255 255 255 / 0.05) 1px, transparent 1px),
+      linear-gradient(to bottom, rgb(255 255 255 / 0.05) 1px, transparent 1px);
+    background-size: 24px 24px;
+  }
+
+  /* 动画 */
+  .animate-fade-in {
+    animation: fadeIn 0.8s ease-out forwards;
+  }
+
+  .animation-delay-200 {
+    animation-delay: 0.2s;
+  }
+
+  @keyframes fadeIn {
+    from {
+      opacity: 0;
+      transform: translateY(20px);
+    }
+    to {
+      opacity: 1;
+      transform: translateY(0);
+    }
+  }
+
+  /* 渐变文本 */
+  .gradient-text {
+    @apply bg-clip-text text-transparent bg-gradient-to-r from-blue-500 to-purple-600;
+  }
+
+  /* 响应式调整 */
+  @media (max-width: 768px) {
+    .container {
+      padding-left: 1rem;
+      padding-right: 1rem;
+    }
+  }
+</style> 

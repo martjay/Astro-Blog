@@ -1,0 +1,347 @@
+import BaseLayout from '../../layouts/BaseLayout.astro';
+import { requireAuth } from '../../middleware/auth';
+import { ipControl } from '../../lib/db';
+import Database from 'better-sqlite3';
+import { join } from 'path';
+
+// 验证管理员身份
+const authResponse = await requireAuth(Astro);
+if (authResponse) return authResponse;
+
+// 获取IP数据
+const bannedIPs = ipControl.getBannedIPs();
+
+// 获取可疑 IP（过去24小时内活动频繁的IP）
+const db = new Database(join(process.cwd(), 'data/comments.db'));
+const suspiciousIPs = db.prepare(`
+  SELECT ip, COUNT(*) as count 
+  FROM ip_records 
+  WHERE created_at > datetime('now', '-24 hours') 
+  GROUP BY ip 
+  HAVING count > 10
+  ORDER BY count DESC
+`).all();
+
+<BaseLayout title="IP管理">
+  <!-- Hero Section -->
+  <section class="relative overflow-hidden bg-gradient-to-br from-blue-600 to-purple-700 dark:from-blue-900 dark:to-purple-900">
+    <div class="absolute inset-0">
+      <div class="absolute inset-0 bg-gradient-to-br from-blue-600/90 to-purple-700/90 dark:from-blue-900/90 dark:to-purple-900/90"></div>
+      <div class="absolute inset-0 bg-grid-white/[0.05] bg-grid-12"></div>
+    </div>
+    <div class="container relative mx-auto px-4 py-12">
+      <div class="max-w-4xl mx-auto">
+        <div class="flex flex-col md:flex-row justify-between items-center gap-6">
+          <div>
+            <h1 class="text-3xl md:text-4xl font-bold text-white mb-2 animate-fade-in">
+              IP管理
+            </h1>
+            <p class="text-white/80 animate-fade-in animation-delay-200">
+              共 {bannedIPs.length} 个已封禁IP，{suspiciousIPs.length} 个可疑IP
+            </p>
+          </div>
+          <div class="flex flex-wrap gap-4 animate-fade-in animation-delay-300">
+            <a
+              href="/admin/comments"
+              class="px-6 py-3 bg-white/10 text-white rounded-full font-medium hover:bg-white/20 transition-colors"
+            >
+              评论管理
+            </a>
+            <a
+              href="/admin/settings"
+              class="px-6 py-3 bg-white/10 text-white rounded-full font-medium hover:bg-white/20 transition-colors"
+            >
+              网站设置
+            </a>
+          </div>
+        </div>
+      </div>
+    </div>
+  </section>
+
+  <!-- Content Section -->
+  <section class="py-12 bg-gray-50 dark:bg-gray-900">
+    <div class="container mx-auto px-4">
+      <div class="max-w-5xl mx-auto">
+        <!-- IP封禁表单 -->
+        <div class="bg-white dark:bg-gray-800 rounded-xl shadow-lg p-6 mb-8 animate-fade-in">
+          <h2 class="text-2xl font-bold gradient-text mb-6">封禁IP</h2>
+          <form id="ban-form" class="grid gap-6 md:grid-cols-2">
+            <div>
+              <label for="ip" class="block text-sm font-medium mb-1">IP地址</label>
+              <input
+                type="text"
+                id="ip"
+                name="ip"
+                required
+                pattern="^(?:(?:25[0-5]|2[0-4][0-9]|[01]?[0-9][0-9]?)\.){3}(?:25[0-5]|2[0-4][0-9]|[01]?[0-9][0-9]?)$"
+                class="w-full px-4 py-2 bg-gray-50 dark:bg-gray-700 border border-gray-200 dark:border-gray-600 rounded-lg focus:ring-2 focus:ring-blue-500 dark:focus:ring-blue-400 focus:border-transparent"
+                placeholder="例如：192.168.1.1"
+              />
+            </div>
+            <div>
+              <label for="duration" class="block text-sm font-medium mb-1">封禁时长（小时，留空为永久）</label>
+              <input
+                type="number"
+                id="duration"
+                name="duration"
+                min="1"
+                class="w-full px-4 py-2 bg-gray-50 dark:bg-gray-700 border border-gray-200 dark:border-gray-600 rounded-lg focus:ring-2 focus:ring-blue-500 dark:focus:ring-blue-400 focus:border-transparent"
+                placeholder="例如：24"
+              />
+            </div>
+            <div class="md:col-span-2">
+              <label for="reason" class="block text-sm font-medium mb-1">封禁原因</label>
+              <input
+                type="text"
+                id="reason"
+                name="reason"
+                required
+                class="w-full px-4 py-2 bg-gray-50 dark:bg-gray-700 border border-gray-200 dark:border-gray-600 rounded-lg focus:ring-2 focus:ring-blue-500 dark:focus:ring-blue-400 focus:border-transparent"
+                placeholder="例如：发送垃圾评论"
+              />
+            </div>
+            <div class="md:col-span-2 flex justify-end">
+              <button
+                type="submit"
+                class="px-6 py-2 bg-blue-500 text-white rounded-lg hover:bg-blue-600 transition-colors"
+              >
+                封禁IP
+              </button>
+            </div>
+          </form>
+        </div>
+
+        <!-- 已封禁IP列表 -->
+        <div class="bg-white dark:bg-gray-800 rounded-xl shadow-lg p-6 animate-fade-in animation-delay-200">
+          <h2 class="text-2xl font-bold gradient-text mb-6">已封禁IP</h2>
+          <div class="overflow-x-auto">
+            <table class="w-full">
+              <thead>
+                <tr class="border-b dark:border-gray-700">
+                  <th class="px-4 py-2 text-left">IP地址</th>
+                  <th class="px-4 py-2 text-left">封禁原因</th>
+                  <th class="px-4 py-2 text-left">封禁时间</th>
+                  <th class="px-4 py-2 text-left">解封时间</th>
+                  <th class="px-4 py-2 text-left">操作</th>
+                </tr>
+              </thead>
+              <tbody>
+                {bannedIPs.map(ip => (
+                  <tr class="border-b dark:border-gray-700">
+                    <td class="px-4 py-2">{ip.ip}</td>
+                    <td class="px-4 py-2">{ip.reason}</td>
+                    <td class="px-4 py-2">{new Date(ip.banned_at).toLocaleString('zh-CN')}</td>
+                    <td class="px-4 py-2">
+                      {ip.banned_until ? new Date(ip.banned_until).toLocaleString('zh-CN') : '永久'}
+                    </td>
+                    <td class="px-4 py-2">
+                      <button
+                        onclick={`unbanIP('${ip.ip}')`}
+                        class="px-3 py-1 bg-red-500 text-white rounded hover:bg-red-600 transition-colors"
+                      >
+                        解封
+                      </button>
+                    </td>
+                  </tr>
+                ))}
+                {bannedIPs.length === 0 && (
+                  <tr>
+                    <td colspan="5" class="px-4 py-8 text-center text-gray-500">
+                      暂无封禁记录
+                    </td>
+                  </tr>
+                )}
+              </tbody>
+            </table>
+          </div>
+        </div>
+
+        <!-- 可疑IP列表 -->
+        <div class="bg-white dark:bg-gray-800 rounded-xl shadow-lg p-6 mt-8 animate-fade-in animation-delay-300">
+          <h2 class="text-2xl font-bold gradient-text mb-6">可疑IP</h2>
+          <div class="overflow-x-auto">
+            <table class="w-full">
+              <thead>
+                <tr class="border-b dark:border-gray-700">
+                  <th class="px-4 py-2 text-left">IP地址</th>
+                  <th class="px-4 py-2 text-left">24小时内活动次数</th>
+                  <th class="px-4 py-2 text-left">操作</th>
+                </tr>
+              </thead>
+              <tbody>
+                {suspiciousIPs.map(ip => (
+                  <tr class="border-b dark:border-gray-700">
+                    <td class="px-4 py-2">{ip.ip}</td>
+                    <td class="px-4 py-2">{ip.count}</td>
+                    <td class="px-4 py-2">
+                      <button
+                        onclick={`quickBan('${ip.ip}', ${ip.count})`}
+                        class="px-3 py-1 bg-yellow-500 text-white rounded hover:bg-yellow-600 transition-colors"
+                      >
+                        快速封禁
+                      </button>
+                    </td>
+                  </tr>
+                ))}
+                {suspiciousIPs.length === 0 && (
+                  <tr>
+                    <td colspan="3" class="px-4 py-8 text-center text-gray-500">
+                      暂无可疑IP
+                    </td>
+                  </tr>
+                )}
+              </tbody>
+            </table>
+          </div>
+        </div>
+      </div>
+    </div>
+  </section>
+</BaseLayout>
+
+<script>
+  // 封禁IP
+  const banForm = document.getElementById('ban-form');
+  banForm?.addEventListener('submit', async (e) => {
+    e.preventDefault();
+    
+    const formData = new FormData(banForm as HTMLFormElement);
+    const ip = formData.get('ip')?.toString();
+    const reason = formData.get('reason')?.toString();
+    const duration = formData.get('duration')?.toString();
+
+    if (!ip || !reason) {
+      alert('请填写完整信息');
+      return;
+    }
+
+    try {
+      const response = await fetch('/api/ip-control/ban', {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+        },
+        body: JSON.stringify({
+          ip,
+          reason,
+          duration: duration ? Number(duration) * 3600 : undefined, // 转换为秒
+        }),
+      });
+
+      if (response.ok) {
+        location.reload();
+      } else {
+        const error = await response.text();
+        alert(error || '操作失败');
+      }
+    } catch (error) {
+      console.error('Error:', error);
+      alert('操作失败');
+    }
+  });
+
+  // 解封IP
+  async function unbanIP(ip: string) {
+    if (!confirm(`确定要解封 ${ip} 吗？`)) return;
+
+    try {
+      const response = await fetch('/api/ip-control/unban', {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+        },
+        body: JSON.stringify({ ip }),
+      });
+
+      if (response.ok) {
+        location.reload();
+      } else {
+        const error = await response.text();
+        alert(error || '操作失败');
+      }
+    } catch (error) {
+      console.error('Error:', error);
+      alert('操作失败');
+    }
+  }
+
+  // 快速封禁
+  async function quickBan(ip: string, count: number) {
+    if (!confirm(`确定要封禁 ${ip} 吗？\n该IP在24小时内有 ${count} 次活动记录。`)) return;
+
+    try {
+      const response = await fetch('/api/ip-control/ban', {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+        },
+        body: JSON.stringify({
+          ip,
+          reason: `24小时内频繁活动（${count}次）`,
+          duration: 24 * 3600, // 默认封禁24小时
+        }),
+      });
+
+      if (response.ok) {
+        location.reload();
+      } else {
+        const error = await response.text();
+        alert(error || '操作失败');
+      }
+    } catch (error) {
+      console.error('Error:', error);
+      alert('操作失败');
+    }
+  }
+</script>
+
+<style>
+  /* 网格背景 */
+  .bg-grid-white {
+    mask-image: linear-gradient(to bottom, transparent, black, transparent);
+  }
+  .bg-grid-12 {
+    background-image: 
+      linear-gradient(to right, rgb(255 255 255 / 0.05) 1px, transparent 1px),
+      linear-gradient(to bottom, rgb(255 255 255 / 0.05) 1px, transparent 1px);
+    background-size: 24px 24px;
+  }
+
+  /* 动画 */
+  .animate-fade-in {
+    animation: fadeIn 0.8s ease-out forwards;
+  }
+
+  .animation-delay-200 {
+    animation-delay: 0.2s;
+  }
+
+  .animation-delay-300 {
+    animation-delay: 0.3s;
+  }
+
+  @keyframes fadeIn {
+    from {
+      opacity: 0;
+      transform: translateY(20px);
+    }
+    to {
+      opacity: 1;
+      transform: translateY(0);
+    }
+  }
+
+  /* 渐变文本 */
+  .gradient-text {
+    @apply bg-clip-text text-transparent bg-gradient-to-r from-blue-500 to-purple-600;
+  }
+
+  /* 响应式调整 */
+  @media (max-width: 768px) {
+    .container {
+      padding-left: 1rem;
+      padding-right: 1rem;
+    }
+  }
+</style> 

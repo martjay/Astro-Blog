@@ -1,0 +1,209 @@
+---
+interface Props {
+  post: any;
+  featured?: boolean;
+}
+
+const { post, featured = false } = Astro.props;
+
+// 获取封面图片
+const coverImage = post.data.heroImage || post.coverImage || extractFirstImage(post.data.content);
+
+// 从内容中提取第一张图片URL
+function extractFirstImage(content: string): string | null {
+  // 匹配 Markdown 图片语法 ![alt](url)
+  const markdownImgRegex = /!\[.*?\]\((.*?)\)/;
+  // 匹配 HTML 图片标签 <img src="url" />
+  const htmlImgRegex = /<img[^>]+src="([^">]+)"/;
+  
+  // 先尝试匹配 Markdown 格式
+  const markdownMatch = content?.match(markdownImgRegex);
+  if (markdownMatch) {
+    return markdownMatch[1];
+  }
+  
+  // 如果没有找到 Markdown 格式的图片，尝试匹配 HTML 格式
+  const htmlMatch = content?.match(htmlImgRegex);
+  return htmlMatch ? htmlMatch[1] : null;
+}
+
+// 生成随机渐变色
+function getRandomGradient(): string {
+  const colors = [
+    ['#FF6B6B', '#4ECDC4'], // 红绿
+    ['#A8E6CF', '#FFD3B6'], // 薄荷绿橙
+    ['#6C5CE7', '#FF9FF3'], // 紫粉
+    ['#45B8AC', '#D65076'], // 青红
+    ['#F9ED69', '#F08A5D'], // 黄橙
+    ['#B83B5E', '#6A2C70'], // 深红紫
+    ['#08D9D6', '#FF2E63'], // 青红
+    ['#F67280', '#C06C84'], // 粉紫
+    ['#45B7D1', '#E6B566'], // 蓝黄
+    ['#2D4059', '#EA5455'], // 深蓝红
+  ];
+  const pair = colors[Math.floor(Math.random() * colors.length)];
+  return `linear-gradient(135deg, ${pair[0]} 0%, ${pair[1]} 100%)`;
+}
+
+// 为每篇文章生成固定的渐变色（基于slug）
+function getGradientForSlug(slug: string): string {
+  const colors = [
+    ['#FF6B6B', '#4ECDC4'],
+    ['#A8E6CF', '#FFD3B6'],
+    ['#6C5CE7', '#FF9FF3'],
+    ['#45B8AC', '#D65076'],
+    ['#F9ED69', '#F08A5D'],
+    ['#B83B5E', '#6A2C70'],
+    ['#08D9D6', '#FF2E63'],
+    ['#F67280', '#C06C84'],
+    ['#45B7D1', '#E6B566'],
+    ['#2D4059', '#EA5455'],
+  ];
+  
+  // 使用slug生成一个固定的索引
+  let hash = 0;
+  for (let i = 0; i < slug.length; i++) {
+    hash = ((hash << 5) - hash) + slug.charCodeAt(i);
+    hash = hash & hash;
+  }
+  const index = Math.abs(hash) % colors.length;
+  const pair = colors[index];
+  return `linear-gradient(135deg, ${pair[0]} 0%, ${pair[1]} 100%)`;
+}
+
+const gradient = getGradientForSlug(post.slug);
+---
+
+{featured ? (
+  <article class="relative group overflow-hidden rounded-2xl h-[400px]">
+    <div class="absolute inset-0 bg-gradient-to-br from-purple-500/80 to-pink-500/80 mix-blend-multiply transition-opacity group-hover:opacity-75"></div>
+    {coverImage ? (
+      <img
+        src={coverImage}
+        alt={post.data.title}
+        class="absolute inset-0 w-full h-full object-cover group-hover:scale-105 transition-transform duration-500"
+        loading="lazy"
+      />
+    ) : (
+      <div
+        class="absolute inset-0 w-full h-full transition-transform duration-500 group-hover:scale-105"
+        style={`background: ${gradient};`}
+      ></div>
+    )}
+    <div class="absolute inset-0 bg-gradient-to-t from-black/80 via-black/40 to-transparent"></div>
+    <a href={`/blog/${post.slug}`} class="block relative h-full p-8 flex flex-col justify-end">
+      <div class="transform transition-transform group-hover:translate-y-0 translate-y-4">
+        <time class="text-white/80 text-sm mb-2 block opacity-0 group-hover:opacity-100 transition-opacity">
+          {post.data.pubDate.toLocaleDateString('zh-CN')}
+        </time>
+        <h2 class="text-3xl font-bold text-white mb-4">
+          {post.data.title}
+        </h2>
+        <p class="text-white/90 mb-4 line-clamp-2 opacity-0 group-hover:opacity-100 transition-opacity">
+          {post.data.description}
+        </p>
+        <div class="flex gap-2 flex-wrap">
+          {post.data.tags.map((tag: string) => (
+            <span class="px-3 py-1 bg-white/20 backdrop-blur-sm rounded-full text-sm text-white">
+              {tag}
+            </span>
+          ))}
+        </div>
+      </div>
+    </a>
+  </article>
+) : (
+  <article class="group h-full">
+    <a href={`/blog/${post.slug}`} class="block h-full rounded-xl overflow-hidden bg-white dark:bg-gray-800/50 backdrop-blur-sm shadow-lg hover:shadow-xl transition-all duration-300">
+      <div class="relative h-48 overflow-hidden">
+        {coverImage ? (
+          <img
+            src={coverImage}
+            alt={post.data.title}
+            class="w-full h-full object-cover group-hover:scale-105 transition-transform duration-300"
+            loading="lazy"
+          />
+        ) : (
+          <div
+            class="w-full h-full transition-transform duration-300 group-hover:scale-105"
+            style={`background: ${gradient};`}
+          ></div>
+        )}
+        <div class="absolute inset-0 bg-gradient-to-t from-black/30 to-transparent opacity-0 group-hover:opacity-100 transition-opacity"></div>
+      </div>
+      <div class="p-6">
+        <div class="flex items-center gap-4 text-sm text-gray-500 dark:text-gray-400 mb-3">
+          <time datetime={post.data.pubDate.toISOString()}>
+            {post.data.pubDate.toLocaleDateString('zh-CN')}
+          </time>
+          {post.data.category && (
+            <span class="px-2 py-1 bg-gray-100 dark:bg-gray-700 rounded-md">
+              {post.data.category}
+            </span>
+          )}
+        </div>
+        <h2 class="text-xl font-bold mb-3 group-hover:text-blue-500 transition-colors line-clamp-2">
+          {post.data.title}
+        </h2>
+        <p class="text-gray-600 dark:text-gray-300 mb-4 line-clamp-2">
+          {post.data.description}
+        </p>
+        <div class="flex flex-wrap gap-2">
+          {post.data.tags.map((tag: string) => (
+            <span class="px-2 py-1 text-sm bg-gray-100 dark:bg-gray-700 rounded-full">
+              {tag}
+            </span>
+          ))}
+        </div>
+      </div>
+    </a>
+  </article>
+)}
+
+<style>
+  @keyframes gradient {
+    0% { background-position: 0% 50%; }
+    50% { background-position: 100% 50%; }
+    100% { background-position: 0% 50%; }
+  }
+
+  .animate-gradient {
+    background-size: 200% 200%;
+    animation: gradient 15s ease infinite;
+  }
+
+  /* 图片加载失败时的占位样式 */
+  img:not([src]), img[src=""], img[src="/images/default-cover.jpg"] {
+    background: linear-gradient(135deg, #6366f1 0%, #a855f7 100%);
+    object-fit: cover;
+  }
+
+  /* 图片加载动画 */
+  img {
+    transition: opacity 0.3s ease;
+  }
+
+  img[loading] {
+    opacity: 0;
+  }
+
+  img.loaded {
+    opacity: 1;
+  }
+</style>
+
+<script>
+  // 图片加载完成后添加loaded类
+  document.addEventListener('astro:page-load', () => {
+    const images = document.querySelectorAll('img[loading="lazy"]');
+    images.forEach(img => {
+      if (img.complete) {
+        img.classList.add('loaded');
+      } else {
+        img.addEventListener('load', () => {
+          img.classList.add('loaded');
+        });
+      }
+    });
+  });
+</script> 

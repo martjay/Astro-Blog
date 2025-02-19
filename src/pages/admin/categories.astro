@@ -1,0 +1,476 @@
+---
+import BaseLayout from '../../layouts/BaseLayout.astro';
+import { requireAuth } from '../../middleware/auth';
+import { categories } from '../../lib/categories';
+
+// 验证管理员身份
+const authResponse = await requireAuth(Astro);
+if (authResponse) return authResponse;
+
+// 获取所有分类
+const allCategories = categories.getAll();
+const categoryTree = categories.getTree();
+---
+
+<BaseLayout title="分类管理">
+  <div class="container mx-auto px-4 py-8">
+    <!-- 返回按钮 -->
+    <div class="mb-6">
+      <a
+        href="/admin/posts"
+        class="inline-flex items-center gap-2 text-gray-600 dark:text-gray-400 hover:text-blue-500 dark:hover:text-blue-400 transition-colors"
+      >
+        <svg class="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+          <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M10 19l-7-7m0 0l7-7m-7 7h18"></path>
+        </svg>
+        <span>返回后台首页</span>
+      </a>
+    </div>
+
+    <!-- Hero Section -->
+    <section class="relative overflow-hidden bg-gradient-to-br from-blue-600 to-purple-700 dark:from-blue-900 dark:to-purple-900">
+      <div class="absolute inset-0">
+        <div class="absolute inset-0 bg-gradient-to-br from-blue-600/90 to-purple-700/90 dark:from-blue-900/90 dark:to-purple-900/90"></div>
+        <div class="absolute inset-0 bg-grid-white/[0.05] bg-grid-12"></div>
+      </div>
+      <div class="container relative mx-auto px-4 py-12">
+        <div class="max-w-4xl mx-auto">
+          <div class="flex flex-col md:flex-row justify-between items-center gap-6">
+            <div>
+              <h1 class="text-3xl md:text-4xl font-bold text-white mb-2 animate-fade-in">
+                分类管理
+              </h1>
+              <p class="text-white/80 animate-fade-in animation-delay-200">
+                共 {allCategories.length} 个分类，{categoryTree.length} 个一级分类
+              </p>
+            </div>
+            <div class="flex flex-wrap gap-4 animate-fade-in animation-delay-300">
+              <a
+                href="/admin/posts"
+                class="px-6 py-3 bg-white/10 text-white rounded-full font-medium hover:bg-white/20 transition-colors"
+              >
+                文章管理
+              </a>
+              <a
+                href="/admin/settings"
+                class="px-6 py-3 bg-white/10 text-white rounded-full font-medium hover:bg-white/20 transition-colors"
+              >
+                网站设置
+              </a>
+            </div>
+          </div>
+        </div>
+      </div>
+    </section>
+
+    <!-- Content Section -->
+    <section class="py-12 bg-gray-50 dark:bg-gray-900">
+      <div class="container mx-auto px-4">
+        <div class="max-w-6xl mx-auto">
+          <!-- 添加分类表单 -->
+          <div class="mb-12 animate-fade-in">
+            <div class="bg-white dark:bg-gray-800 rounded-xl shadow-lg p-6">
+              <h2 class="text-2xl font-bold gradient-text mb-6">添加分类</h2>
+              <form id="add-category-form" class="space-y-4">
+                <div class="grid gap-4 md:grid-cols-2">
+                  <div>
+                    <label for="name" class="block text-sm font-medium mb-1">分类名称</label>
+                    <input
+                      type="text"
+                      id="name"
+                      name="name"
+                      required
+                      placeholder="例如：技术文章"
+                      class="w-full px-4 py-2 bg-gray-50 dark:bg-gray-700 border border-gray-200 dark:border-gray-600 rounded-lg focus:ring-2 focus:ring-blue-500 dark:focus:ring-blue-400 focus:border-transparent"
+                    />
+                  </div>
+                  <div>
+                    <label for="slug" class="block text-sm font-medium mb-1">别名</label>
+                    <input
+                      type="text"
+                      id="slug"
+                      name="slug"
+                      required
+                      pattern="[a-z0-9][a-z0-9-]*[a-z0-9]"
+                      title="只能包含小写字母、数字和连字符，且不能以连字符开头或结尾"
+                      placeholder="例如：tech"
+                      class="w-full px-4 py-2 bg-gray-50 dark:bg-gray-700 border border-gray-200 dark:border-gray-600 rounded-lg focus:ring-2 focus:ring-blue-500 dark:focus:ring-blue-400 focus:border-transparent"
+                    />
+                    <p class="mt-1 text-sm text-gray-500">只能包含小写字母、数字和连字符，且不能以连字符开头或结尾</p>
+                  </div>
+                </div>
+                <div>
+                  <label for="description" class="block text-sm font-medium mb-1">描述</label>
+                  <input
+                    type="text"
+                    id="description"
+                    name="description"
+                    placeholder="分类描述（可选）"
+                    class="w-full px-4 py-2 bg-gray-50 dark:bg-gray-700 border border-gray-200 dark:border-gray-600 rounded-lg focus:ring-2 focus:ring-blue-500 dark:focus:ring-blue-400 focus:border-transparent"
+                  />
+                </div>
+                <div>
+                  <label for="parent_id" class="block text-sm font-medium mb-1">父分类</label>
+                  <select
+                    id="parent_id"
+                    name="parent_id"
+                    class="w-full px-4 py-2 bg-gray-50 dark:bg-gray-700 border border-gray-200 dark:border-gray-600 rounded-lg focus:ring-2 focus:ring-blue-500 dark:focus:ring-blue-400 focus:border-transparent"
+                  >
+                    <option value="">无（作为一级分类）</option>
+                    {categoryTree.map(cat => (
+                      <option value={cat.id}>{cat.name}</option>
+                    ))}
+                  </select>
+                </div>
+                <button
+                  type="submit"
+                  class="px-6 py-2 bg-blue-500 text-white rounded-lg hover:bg-blue-600 transition-colors"
+                >
+                  添加分类
+                </button>
+              </form>
+            </div>
+          </div>
+
+          <!-- 分类列表 -->
+          <div>
+            <div class="flex items-center gap-4 mb-6">
+              <h2 class="text-2xl font-bold gradient-text">分类列表</h2>
+              <div class="flex-grow border-t border-gray-200 dark:border-gray-700"></div>
+              <span class="text-gray-500 dark:text-gray-400">{allCategories.length} 个</span>
+            </div>
+            <div class="grid gap-4">
+              {categoryTree.map(category => (
+                <div class="bg-white dark:bg-gray-800 rounded-xl shadow-lg animate-fade-in">
+                  <!-- 父分类 -->
+                  <div class="p-6 border-b dark:border-gray-700">
+                    <div class="flex flex-wrap justify-between items-start gap-4">
+                      <div>
+                        <div class="flex items-center gap-3 mb-2">
+                          <h3 class="text-xl font-bold">{category.name}</h3>
+                          <span class="px-2 py-1 bg-blue-100 dark:bg-blue-900 text-blue-800 dark:text-blue-200 rounded-full text-sm">
+                            {category.children.length} 个子分类
+                          </span>
+                        </div>
+                        <p class="text-gray-600 dark:text-gray-400 mb-2">
+                          {category.description || '暂无描述'}
+                        </p>
+                        <div class="text-sm text-gray-500 dark:text-gray-400">
+                          别名：{category.slug}
+                        </div>
+                      </div>
+                      <div class="flex gap-2">
+                        <button
+                          onclick={`editCategory(${JSON.stringify(category)})`}
+                          class="px-4 py-2 bg-blue-500 text-white rounded-lg hover:bg-blue-600 transition-colors"
+                        >
+                          编辑
+                        </button>
+                        <button
+                          onclick={`deleteCategory(${category.id})`}
+                          class="px-4 py-2 bg-red-500 text-white rounded-lg hover:bg-red-600 transition-colors"
+                        >
+                          删除
+                        </button>
+                      </div>
+                    </div>
+                  </div>
+                  
+                  <!-- 子分类 -->
+                  {category.children.length > 0 && (
+                    <div class="p-4">
+                      <div class="grid gap-4">
+                        {category.children.map(child => (
+                          <div class="p-4 bg-gray-50 dark:bg-gray-700/50 rounded-lg">
+                            <div class="flex flex-wrap justify-between items-start gap-4">
+                              <div>
+                                <h4 class="font-bold mb-1">{child.name}</h4>
+                                <p class="text-sm text-gray-600 dark:text-gray-400 mb-1">
+                                  {child.description || '暂无描述'}
+                                </p>
+                                <div class="text-sm text-gray-500 dark:text-gray-400">
+                                  别名：{child.slug}
+                                </div>
+                              </div>
+                              <div class="flex gap-2">
+                                <button
+                                  onclick={`editCategory(${JSON.stringify(child)})`}
+                                  class="px-3 py-1 bg-blue-500 text-white rounded-lg hover:bg-blue-600 transition-colors text-sm"
+                                >
+                                  编辑
+                                </button>
+                                <button
+                                  onclick={`deleteCategory(${child.id})`}
+                                  class="px-3 py-1 bg-red-500 text-white rounded-lg hover:bg-red-600 transition-colors text-sm"
+                                >
+                                  删除
+                                </button>
+                              </div>
+                            </div>
+                          </div>
+                        ))}
+                      </div>
+                    </div>
+                  )}
+                </div>
+              ))}
+
+              {categoryTree.length === 0 && (
+                <div class="text-center py-12">
+                  <div class="inline-block p-6 bg-white dark:bg-gray-800 rounded-lg shadow-lg">
+                    <svg class="w-16 h-16 mx-auto mb-4 text-gray-400" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                      <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M19 11H5m14 0a2 2 0 012 2v6a2 2 0 01-2 2H5a2 2 0 01-2-2v-6a2 2 0 012-2m14 0V9a2 2 0 00-2-2M5 11V9a2 2 0 012-2m0 0V5a2 2 0 012-2h6a2 2 0 012 2v2M7 7h10"></path>
+                    </svg>
+                    <h3 class="text-xl font-bold mb-2">暂无分类</h3>
+                    <p class="text-gray-600 dark:text-gray-400">
+                      快来添加第一个分类吧
+                    </p>
+                  </div>
+                </div>
+              )}
+            </div>
+          </div>
+        </div>
+      </div>
+    </section>
+  </div>
+</BaseLayout>
+
+<script>
+  let editingId: number | null = null;
+
+  async function addCategory(formData: FormData) {
+    try {
+      const response = await fetch('/api/categories', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          name: formData.get('name'),
+          slug: formData.get('slug'),
+          description: formData.get('description'),
+          parent_id: formData.get('parent_id') ? Number(formData.get('parent_id')) : null
+        })
+      });
+
+      if (response.ok) {
+        location.reload();
+      } else {
+        const data = await response.json();
+        alert(data.error || '添加失败，请重试');
+      }
+    } catch (error) {
+      console.error('Error:', error);
+      alert('添加失败，请重试');
+    }
+  }
+
+  async function editCategory(category: any) {
+    const modal = document.createElement('div');
+    modal.className = 'fixed inset-0 z-50 overflow-y-auto';
+    modal.innerHTML = `
+      <div class="flex items-center justify-center min-h-screen px-4 pt-4 pb-20 text-center sm:block sm:p-0">
+        <div class="fixed inset-0 transition-opacity" aria-hidden="true">
+          <div class="absolute inset-0 bg-gray-500 dark:bg-gray-900 opacity-75"></div>
+        </div>
+        <div class="inline-block align-bottom bg-white dark:bg-gray-800 rounded-lg text-left overflow-hidden shadow-xl transform transition-all sm:my-8 sm:align-middle sm:max-w-lg sm:w-full">
+          <form id="edit-category-form" class="p-6 space-y-4">
+            <h3 class="text-lg font-bold mb-4">编辑分类</h3>
+            <div>
+              <label class="block text-sm font-medium mb-1">分类名称</label>
+              <input
+                type="text"
+                name="name"
+                value="${category.name}"
+                required
+                class="w-full px-4 py-2 bg-gray-50 dark:bg-gray-700 border border-gray-200 dark:border-gray-600 rounded-lg"
+              />
+            </div>
+            <div>
+              <label class="block text-sm font-medium mb-1">别名</label>
+              <input
+                type="text"
+                name="slug"
+                value="${category.slug}"
+                required
+                pattern="[a-z0-9][a-z0-9-]*[a-z0-9]"
+                title="只能包含小写字母、数字和连字符，且不能以连字符开头或结尾"
+                class="w-full px-4 py-2 bg-gray-50 dark:bg-gray-700 border border-gray-200 dark:border-gray-600 rounded-lg"
+              />
+              <p class="mt-1 text-sm text-gray-500">只能包含小写字母、数字和连字符，且不能以连字符开头或结尾</p>
+            </div>
+            <div>
+              <label class="block text-sm font-medium mb-1">描述</label>
+              <input
+                type="text"
+                name="description"
+                value="${category.description || ''}"
+                class="w-full px-4 py-2 bg-gray-50 dark:bg-gray-700 border border-gray-200 dark:border-gray-600 rounded-lg"
+              />
+            </div>
+            <div>
+              <label for="parent_id" class="block text-sm font-medium mb-1">父分类</label>
+              <select
+                id="parent_id"
+                name="parent_id"
+                class="w-full px-4 py-2 bg-gray-50 dark:bg-gray-700 border border-gray-200 dark:border-gray-600 rounded-lg focus:ring-2 focus:ring-blue-500 dark:focus:ring-blue-400 focus:border-transparent"
+              >
+                <option value="">无</option>
+                {allCategories.map(cat => (
+                  <option value={cat.id}>{cat.name}</option>
+                ))}
+              </select>
+            </div>
+            <div>
+              <label for="order_index" class="block text-sm font-medium mb-1">排序</label>
+              <input
+                type="number"
+                id="order_index"
+                name="order_index"
+                value="${category.order_index}"
+                class="w-full px-4 py-2 bg-gray-50 dark:bg-gray-700 border border-gray-200 dark:border-gray-600 rounded-lg"
+              />
+            </div>
+            <div class="mt-6 flex justify-end gap-4">
+              <button
+                type="button"
+                onclick="this.closest('.fixed').remove()"
+                class="px-4 py-2 border dark:border-gray-600 rounded-lg hover:bg-gray-100 dark:hover:bg-gray-700"
+              >
+                取消
+              </button>
+              <button
+                type="submit"
+                class="px-4 py-2 bg-blue-500 text-white rounded-lg hover:bg-blue-600"
+              >
+                保存
+              </button>
+            </div>
+          </form>
+        </div>
+      </div>
+    `;
+
+    document.body.appendChild(modal);
+    editingId = category.id;
+
+    const form = document.getElementById('edit-category-form');
+    form?.addEventListener('submit', async (e) => {
+      e.preventDefault();
+      const formData = new FormData(e.target as HTMLFormElement);
+      
+      try {
+        const response = await fetch(`/api/categories/${editingId}`, {
+          method: 'PUT',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({
+            name: formData.get('name'),
+            slug: formData.get('slug'),
+            description: formData.get('description'),
+            parent_id: formData.get('parent_id') ? Number(formData.get('parent_id')) : null,
+            order_index: formData.get('order_index') ? Number(formData.get('order_index')) : undefined
+          })
+        });
+
+        if (response.ok) {
+          location.reload();
+        } else {
+          const data = await response.json();
+          alert(data.error || '更新失败，请重试');
+        }
+      } catch (error) {
+        console.error('Error:', error);
+        alert('更新失败，请重试');
+      }
+    });
+  }
+
+  async function deleteCategory(id: number) {
+    if (!confirm('确定要删除这个分类吗？如果是父分类，其下的子分类将变为一级分类。')) return;
+
+    try {
+      const response = await fetch(`/api/categories/${id}`, {
+        method: 'DELETE'
+      });
+
+      if (response.ok) {
+        location.reload();
+      } else {
+        alert('删除失败，请重试');
+      }
+    } catch (error) {
+      console.error('Error:', error);
+      alert('删除失败，请重试');
+    }
+  }
+
+  // 监听添加分类表单提交
+  document.getElementById('add-category-form')?.addEventListener('submit', async (e) => {
+    e.preventDefault();
+    const formData = new FormData(e.target as HTMLFormElement);
+    await addCategory(formData);
+  });
+
+  // 自动生成别名
+  const nameInput = document.getElementById('name');
+  const slugInput = document.getElementById('slug');
+
+  nameInput?.addEventListener('input', (e) => {
+    if (slugInput && !slugInput.value) {
+      const name = (e.target as HTMLInputElement).value;
+      slugInput.value = name
+        .toLowerCase()
+        .replace(/\s+/g, '-')
+        .replace(/[^\w\-]+/g, '');
+    }
+  });
+</script>
+
+<style>
+  /* 网格背景 */
+  .bg-grid-white {
+    mask-image: linear-gradient(to bottom, transparent, black, transparent);
+  }
+  .bg-grid-12 {
+    background-image: 
+      linear-gradient(to right, rgb(255 255 255 / 0.05) 1px, transparent 1px),
+      linear-gradient(to bottom, rgb(255 255 255 / 0.05) 1px, transparent 1px);
+    background-size: 24px 24px;
+  }
+
+  /* 动画 */
+  .animate-fade-in {
+    animation: fadeIn 0.8s ease-out forwards;
+  }
+
+  .animation-delay-200 {
+    animation-delay: 0.2s;
+  }
+
+  .animation-delay-300 {
+    animation-delay: 0.3s;
+  }
+
+  @keyframes fadeIn {
+    from {
+      opacity: 0;
+      transform: translateY(20px);
+    }
+    to {
+      opacity: 1;
+      transform: translateY(0);
+    }
+  }
+
+  /* 渐变文本 */
+  .gradient-text {
+    @apply bg-clip-text text-transparent bg-gradient-to-r from-blue-500 to-purple-600;
+  }
+
+  /* 响应式调整 */
+  @media (max-width: 768px) {
+    .container {
+      padding-left: 1rem;
+      padding-right: 1rem;
+    }
+  }
+</style> 

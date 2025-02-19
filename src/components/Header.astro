@@ -1,0 +1,113 @@
+---
+import ThemeToggle from './ThemeToggle.astro';
+import SearchModal from './SearchModal.astro';
+import { categories } from '../lib/categories';
+
+interface Props {
+  siteTitle: string;
+}
+
+const { siteTitle } = Astro.props;
+const categoryTree = categories.getTree();
+---
+
+<header class="border-b dark:border-gray-700">
+  <nav class="container mx-auto px-4 py-4 flex justify-between items-center">
+    <a href="/" class="text-2xl font-bold">{siteTitle}</a>
+    <div class="flex items-center gap-4">
+      <!-- 文章分类下拉菜单 -->
+      <div class="relative group">
+        <a href="/blog" class="hover:text-blue-500 flex items-center gap-1">
+          文章
+          <svg xmlns="http://www.w3.org/2000/svg" class="h-4 w-4" viewBox="0 0 20 20" fill="currentColor">
+            <path fill-rule="evenodd" d="M5.293 7.293a1 1 0 011.414 0L10 10.586l3.293-3.293a1 1 0 111.414 1.414l-4 4a1 1 0 01-1.414 0l-4-4a1 1 0 010-1.414z" clip-rule="evenodd" />
+          </svg>
+        </a>
+        <div class="absolute left-0 mt-2 w-48 bg-white dark:bg-gray-800 rounded-lg shadow-lg opacity-0 invisible group-hover:opacity-100 group-hover:visible transition-all duration-200 z-50">
+          {categoryTree.map(category => (
+            <div class="relative group/submenu">
+              <a
+                href={`/categories/${category.slug}`}
+                class="block px-4 py-2 hover:bg-gray-100 dark:hover:bg-gray-700 first:rounded-t-lg text-gray-800 dark:text-gray-200"
+              >
+                <div class="flex items-center justify-between">
+                  <span>{category.name}</span>
+                  {category.children.length > 0 && (
+                    <svg xmlns="http://www.w3.org/2000/svg" class="h-4 w-4" viewBox="0 0 20 20" fill="currentColor">
+                      <path fill-rule="evenodd" d="M7.293 14.707a1 1 0 010-1.414L10.586 10 7.293 6.707a1 1 0 011.414-1.414l4 4a1 1 0 010 1.414l-4 4a1 1 0 01-1.414 0z" clip-rule="evenodd" />
+                    </svg>
+                  )}
+                </div>
+              </a>
+              {category.children.length > 0 && (
+                <div class="absolute left-full top-0 w-48 bg-white dark:bg-gray-800 rounded-lg shadow-lg opacity-0 invisible group-hover/submenu:opacity-100 group-hover/submenu:visible transition-all duration-200">
+                  {category.children.map(child => (
+                    <a
+                      href={`/categories/${child.slug}`}
+                      class="block px-4 py-2 hover:bg-gray-100 dark:hover:bg-gray-700 first:rounded-t-lg last:rounded-b-lg text-gray-800 dark:text-gray-200"
+                    >
+                      {child.name}
+                    </a>
+                  ))}
+                </div>
+              )}
+            </div>
+          ))}
+        </div>
+      </div>
+      <a href="/archive" class="hover:text-blue-500">归档</a>
+      <a href="/tags" class="hover:text-blue-500">标签</a>
+      <a href="/about" class="hover:text-blue-500">关于</a>
+      <a href="/rss.xml" class="hover:text-blue-500" title="RSS订阅">
+        <svg class="w-5 h-5" fill="currentColor" viewBox="0 0 20 20">
+          <path d="M5 3a1 1 0 000 2c5.523 0 10 4.477 10 10a1 1 0 102 0C17 8.373 11.627 3 5 3z"/>
+          <path d="M4 9a1 1 0 000 2c3.314 0 6 2.686 6 6a1 1 0 102 0c0-4.418-3.582-8-8-8z"/>
+          <path d="M3 15a2 2 0 114 0 2 2 0 01-4 0z"/>
+        </svg>
+      </a>
+      <SearchModal />
+      <ThemeToggle />
+    </div>
+  </nav>
+</header>
+
+<style>
+  /* 确保下拉菜单不会被其他元素遮挡 */
+  .group:hover .absolute {
+    z-index: 50;
+  }
+
+  /* 添加下拉箭头动画 */
+  .group:hover svg {
+    transform: rotate(180deg);
+  }
+
+  svg {
+    transition: transform 0.2s;
+  }
+
+  /* 子菜单定位和动画 */
+  .group/submenu:hover > .absolute {
+    margin-top: 0;
+    margin-left: 0.5rem;
+  }
+
+  /* 确保子菜单在悬停时保持显示 */
+  .group/submenu:hover > a {
+    background-color: theme('colors.gray.100');
+  }
+
+  .dark .group/submenu:hover > a {
+    background-color: theme('colors.gray.700');
+  }
+
+  /* 添加过渡效果 */
+  .absolute {
+    transition: all 0.2s ease-in-out;
+  }
+
+  /* 修复子菜单显示位置 */
+  .group/submenu {
+    position: relative;
+  }
+</style> 

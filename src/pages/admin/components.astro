@@ -1,0 +1,261 @@
+---
+import BaseLayout from '../../layouts/BaseLayout.astro';
+import { requireAuth } from '../../middleware/auth';
+import { settings } from '../../lib/settings';
+import type { HomeComponent } from '../../lib/settings';
+
+// 验证管理员身份
+const authResponse = await requireAuth(Astro);
+if (authResponse) return authResponse;
+
+// 获取所有组件
+const components = settings.getHomeComponents();
+
+// 可用的图标列表
+const availableIcons = [
+  { value: 'lightbulb', label: '灯泡' },
+  { value: 'book', label: '书本' },
+  { value: 'globe', label: '地球' },
+  { value: 'code', label: '代码' },
+  { value: 'heart', label: '心形' },
+  { value: 'star', label: '星星' },
+  { value: 'pen', label: '笔' },
+  { value: 'chat', label: '聊天' },
+  { value: 'rocket', label: '火箭' },
+  { value: 'puzzle', label: '拼图' }
+];
+---
+
+<BaseLayout title="首页组件管理">
+  <div class="container mx-auto px-4 py-8">
+    <div class="mb-6">
+      <a
+        href="/admin/posts"
+        class="inline-flex items-center gap-2 text-gray-600 dark:text-gray-400 hover:text-blue-500"
+      >
+        <svg class="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+          <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M10 19l-7-7m0 0l7-7m-7 7h18"></path>
+        </svg>
+        返回
+      </a>
+    </div>
+
+    <div class="max-w-4xl mx-auto">
+      <div class="flex justify-between items-center mb-8">
+        <h1 class="text-2xl font-bold">首页组件管理</h1>
+        <div class="flex gap-4">
+          <button
+            onclick="resetComponents()"
+            class="px-4 py-2 bg-yellow-500 text-white rounded-lg hover:bg-yellow-600 transition-colors"
+          >
+            重置默认
+          </button>
+          <a
+            href="/"
+            target="_blank"
+            class="px-4 py-2 bg-gray-500 text-white rounded-lg hover:bg-gray-600 transition-colors"
+          >
+            预览
+          </a>
+        </div>
+      </div>
+
+      <div class="space-y-6" id="components-list">
+        {components.map((component, index) => (
+          <div
+            class="p-6 bg-white dark:bg-gray-800 rounded-lg shadow-lg"
+            data-id={component.id}
+          >
+            <div class="flex items-start justify-between gap-4">
+              <div class="flex-grow">
+                <div class="grid gap-4 md:grid-cols-2">
+                  <div>
+                    <label class="block text-sm font-medium mb-1">标题</label>
+                    <input
+                      type="text"
+                      value={component.title}
+                      class="w-full px-3 py-2 border dark:border-gray-700 rounded-lg bg-transparent"
+                      onchange={`updateComponent(${component.id}, 'title', this.value)`}
+                    />
+                  </div>
+                  <div>
+                    <label class="block text-sm font-medium mb-1">图标</label>
+                    <select
+                      class="w-full px-3 py-2 border dark:border-gray-700 rounded-lg bg-transparent"
+                      onchange={`updateComponent(${component.id}, 'icon', this.value)`}
+                    >
+                      {availableIcons.map(icon => (
+                        <option value={icon.value} selected={component.icon === icon.value}>
+                          {icon.label}
+                        </option>
+                      ))}
+                    </select>
+                  </div>
+                </div>
+                <div class="mt-4">
+                  <label class="block text-sm font-medium mb-1">描述</label>
+                  <textarea
+                    class="w-full px-3 py-2 border dark:border-gray-700 rounded-lg bg-transparent"
+                    rows="2"
+                    onchange={`updateComponent(${component.id}, 'description', this.value)`}
+                  >{component.description}</textarea>
+                </div>
+              </div>
+              <div class="flex flex-col gap-2">
+                {index > 0 && (
+                  <button
+                    onclick={`moveComponent(${component.id}, 'up')`}
+                    class="p-2 text-gray-500 hover:text-blue-500"
+                    title="上移"
+                  >
+                    <svg class="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                      <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M5 15l7-7 7 7"></path>
+                    </svg>
+                  </button>
+                )}
+                {index < components.length - 1 && (
+                  <button
+                    onclick={`moveComponent(${component.id}, 'down')`}
+                    class="p-2 text-gray-500 hover:text-blue-500"
+                    title="下移"
+                  >
+                    <svg class="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                      <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M19 9l-7 7-7-7"></path>
+                    </svg>
+                  </button>
+                )}
+                <button
+                  onclick={`toggleVisibility(${component.id})`}
+                  class={`p-2 ${component.is_visible ? 'text-green-500' : 'text-gray-400'} hover:text-blue-500`}
+                  title={component.is_visible ? '点击隐藏' : '点击显示'}
+                >
+                  <svg class="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                    <path
+                      stroke-linecap="round"
+                      stroke-linejoin="round"
+                      stroke-width="2"
+                      d={component.is_visible
+                        ? "M15 12a3 3 0 11-6 0 3 3 0 016 0z M2.458 12C3.732 7.943 7.523 5 12 5c4.478 0 8.268 2.943 9.542 7-1.274 4.057-5.064 7-9.542 7-4.477 0-8.268-2.943-9.542-7z"
+                        : "M13.875 18.825A10.05 10.05 0 0112 19c-4.478 0-8.268-2.943-9.543-7a9.97 9.97 0 011.563-3.029m5.858.908a3 3 0 114.243 4.243M9.878 9.878l4.242 4.242M9.88 9.88l-3.29-3.29m7.532 7.532l3.29 3.29M3 3l3.59 3.59m0 0A9.953 9.953 0 0112 5c4.478 0 8.268 2.943 9.543 7a10.025 10.025 0 01-4.132 5.411m0 0L21 21"
+                      }
+                    ></path>
+                  </svg>
+                </button>
+              </div>
+            </div>
+          </div>
+        ))}
+      </div>
+    </div>
+  </div>
+</BaseLayout>
+
+<script>
+  // 更新组件
+  async function updateComponent(id: number, field: string, value: string) {
+    try {
+      const response = await fetch(`/api/components/${id}`, {
+        method: 'PUT',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ [field]: value })
+      });
+
+      if (!response.ok) {
+        throw new Error('更新失败');
+      }
+    } catch (error) {
+      console.error('Error:', error);
+      alert('更新失败，请重试');
+    }
+  }
+
+  // 移动组件
+  async function moveComponent(id: number, direction: 'up' | 'down') {
+    const componentsList = document.getElementById('components-list');
+    if (!componentsList) return;
+
+    const components = Array.from(componentsList.children);
+    const currentIndex = components.findIndex(comp => comp.dataset.id === id.toString());
+    if (currentIndex === -1) return;
+
+    const newIndex = direction === 'up' ? currentIndex - 1 : currentIndex + 1;
+    if (newIndex < 0 || newIndex >= components.length) return;
+
+    try {
+      // 获取所有组件的ID，按新顺序排列
+      const orderedIds = components.map(comp => Number(comp.dataset.id));
+      [orderedIds[currentIndex], orderedIds[newIndex]] = [orderedIds[newIndex], orderedIds[currentIndex]];
+
+      const response = await fetch('/api/components/order', {
+        method: 'PUT',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ orderedIds })
+      });
+
+      if (!response.ok) {
+        throw new Error('更新顺序失败');
+      }
+
+      // 刷新页面以显示新顺序
+      window.location.reload();
+    } catch (error) {
+      console.error('Error:', error);
+      alert('更新顺序失败，请重试');
+    }
+  }
+
+  // 切换可见性
+  async function toggleVisibility(id: number) {
+    try {
+      const response = await fetch(`/api/components/${id}/visibility`, {
+        method: 'PUT'
+      });
+
+      if (!response.ok) {
+        throw new Error('更新可见性失败');
+      }
+
+      // 刷新页面以显示更新后的状态
+      window.location.reload();
+    } catch (error) {
+      console.error('Error:', error);
+      alert('更新可见性失败，请重试');
+    }
+  }
+
+  // 重置组件
+  async function resetComponents() {
+    if (!confirm('确定要重置所有组件为默认状态吗？此操作不可恢复！')) {
+      return;
+    }
+
+    try {
+      const response = await fetch('/api/components/reset', {
+        method: 'POST'
+      });
+
+      if (!response.ok) {
+        throw new Error('重置失败');
+      }
+
+      // 刷新页面以显示默认组件
+      window.location.reload();
+    } catch (error) {
+      console.error('Error:', error);
+      alert('重置失败，请重试');
+    }
+  }
+
+  // 声明全局函数
+  declare global {
+    function updateComponent(id: number, field: string, value: string): void;
+    function moveComponent(id: number, direction: 'up' | 'down'): void;
+    function toggleVisibility(id: number): void;
+    function resetComponents(): void;
+  }
+
+  window.updateComponent = updateComponent;
+  window.moveComponent = moveComponent;
+  window.toggleVisibility = toggleVisibility;
+  window.resetComponents = resetComponents;
+</script> 

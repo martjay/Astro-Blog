@@ -1,0 +1,307 @@
+---
+interface Props {
+  id: string;
+  name: string;
+  value?: string;
+  required?: boolean;
+}
+
+const { id, name, value = '', required = false } = Astro.props;
+const apiKey = import.meta.env.PUBLIC_TINYMCE_API_KEY;
+---
+
+<div class="editor-wrapper">
+  <textarea
+    id={id}
+    name={name}
+    style="visibility: hidden"
+    class="hidden"
+  >{value}</textarea>
+</div>
+
+<!-- 引入 TinyMCE -->
+<script src={`https://cdn.tiny.cloud/1/${apiKey}/tinymce/6/tinymce.min.js`} referrerpolicy="origin"></script>
+
+<script define:vars={{ id, required }}>
+  // 等待 TinyMCE 加载完成
+  window.addEventListener('load', function() {
+    if (typeof tinymce !== 'undefined') {
+      console.log('TinyMCE loaded, initializing editor...');
+      tinymce.init({
+        selector: `#${id}`,
+        plugins: [
+          'advlist', 'autolink', 'lists', 'link', 'image', 'charmap', 'preview',
+          'anchor', 'searchreplace', 'visualblocks', 'code', 'fullscreen',
+          'insertdatetime', 'media', 'table', 'help', 'wordcount', 'codesample'
+        ],
+        toolbar: 'undo redo | blocks | ' +
+          'bold italic backcolor | alignleft aligncenter ' +
+          'alignright alignjustify | bullist numlist outdent indent | ' +
+          'removeformat | image media link codesample | help',
+        menubar: 'file edit view insert format tools table help',
+        content_style: 'body { font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, "Helvetica Neue", Arial, sans-serif; font-size: 16px; }',
+        height: 500,
+        language: 'zh_CN',
+        language_url: '/tinymce/langs/zh_CN.js',
+        // 链接相关配置
+        link_title: true,
+        link_class_list: [
+          { title: '无', value: '' },
+          { title: '新窗口打开', value: 'external-link' }
+        ],
+        link_default_target: '_blank',
+        link_context_toolbar: true,
+        link_assume_external_targets: true,
+        
+        // 获取文章列表
+        link_list: async function() {
+          try {
+            const response = await fetch('/api/posts/list');
+            if (!response.ok) return [];
+            const posts = await response.json();
+            return posts.map(function(post) {
+              return {
+                title: post.title,
+                value: '/blog/' + post.slug,
+                target: '_self'
+              };
+            });
+          } catch (error) {
+            console.error('Error loading link list:', error);
+            return [];
+          }
+        },
+        
+        // 自定义链接模板
+        link_template_callback: function(data) {
+          let html = '';
+          if (data.anchor) {
+            html = '<a href="#' + data.anchor + '"' + 
+                  (data.title ? ' title="' + data.title + '"' : '') + '>' +
+                  (data.text || data.anchor) + '</a>';
+          } else if (data.url) {
+            html = '<a href="' + data.url + '"' +
+                  (data.target ? ' target="' + data.target + '"' : '') +
+                  (data.title ? ' title="' + data.title + '"' : '') +
+                  (data.class ? ' class="' + data.class + '"' : '') + '>' +
+                  (data.text || data.url) + '</a>';
+          }
+          return html;
+        },
+        images_upload_url: '/api/upload',
+        images_upload_handler: async (blobInfo, progress) => {
+          try {
+            const formData = new FormData();
+            formData.append('file', blobInfo.blob(), blobInfo.filename());
+
+            const response = await fetch('/api/upload', {
+              method: 'POST',
+              body: formData
+            });
+
+            if (!response.ok) {
+              throw new Error('上传失败');
+            }
+
+            const data = await response.json();
+            return data.location;
+          } catch (error) {
+            console.error('Error uploading image:', error);
+            throw error;
+          }
+        },
+        setup: (editor) => {
+          console.log('Editor setup started...');
+          
+          // 自动保存草稿
+          let timer;
+          editor.on('input', () => {
+            clearTimeout(timer);
+            timer = setTimeout(() => {
+              const content = editor.getContent();
+              localStorage.setItem(`draft_${editor.id}`, content);
+              console.log('Content auto-saved to draft');
+            }, 1000);
+          });
+
+          // 加载草稿
+          editor.on('init', () => {
+            console.log('Editor initialized');
+            const draft = localStorage.getItem(`draft_${editor.id}`);
+            if (draft && !editor.getContent()) {
+              const useDraft = confirm('发现未保存的草稿，是否恢复？');
+              if (useDraft) {
+                editor.setContent(draft);
+                console.log('Draft content restored');
+              }
+              localStorage.removeItem(`draft_${editor.id}`);
+            }
+
+            // 在编辑器初始化完成后绑定表单提交事件
+            const form = editor.getElement().closest('form');
+            if (!form) {
+              console.error('Form not found');
+              return;
+            }
+            console.log('Form found, binding submit event');
+
+            form.addEventListener('submit', (e) => {
+              // 如果编辑器是必填的，检查内容是否为空
+              if (required && !editor.getContent().trim()) {
+                e.preventDefault();
+                alert('请输入文章内容');
+                editor.focus();
+                return;
+              }
+
+              // 更新隐藏的 textarea 的值
+              editor.save();
+            });
+          });
+
+          // 监听主题变化
+          const observer = new MutationObserver((mutations) => {
+            mutations.forEach((mutation) => {
+              if (mutation.attributeName === 'class') {
+                const isDark = document.documentElement.classList.contains('dark');
+                if (tinymce.activeEditor) {
+                  try {
+                    const registry = tinymce.activeEditor.ui.registry;
+                    if (registry && typeof registry.getAll === 'function') {
+                      const skins = registry.getAll().skins;
+                      if (skins) {
+                        skins.forEach(skin => {
+                          if (skin && typeof skin.load === 'function') {
+                            skin.load(isDark ? 'oxide-dark' : 'oxide', () => {
+                              if (tinymce.activeEditor && tinymce.activeEditor.contentDocument) {
+                                tinymce.activeEditor.contentDocument.body.className = 
+                                  isDark ? 'dark' : 'default';
+                              }
+                            });
+                          }
+                        });
+                      }
+                    }
+                  } catch (error) {
+                    console.warn('Error updating editor theme:', error);
+                  }
+                }
+              }
+            });
+          });
+
+          observer.observe(document.documentElement, {
+            attributes: true,
+            attributeFilter: ['class']
+          });
+
+          // 在编辑器销毁时断开观察器
+          editor.on('remove', () => {
+            observer.disconnect();
+            console.log('Editor observer disconnected');
+          });
+        },
+        // 代码高亮设置
+        codesample_languages: [
+          { text: 'HTML/XML', value: 'markup' },
+          { text: 'JavaScript', value: 'javascript' },
+          { text: 'TypeScript', value: 'typescript' },
+          { text: 'CSS', value: 'css' },
+          { text: 'PHP', value: 'php' },
+          { text: 'Python', value: 'python' },
+          { text: 'Java', value: 'java' },
+          { text: 'C', value: 'c' },
+          { text: 'C++', value: 'cpp' },
+          { text: 'C#', value: 'csharp' },
+          { text: 'Ruby', value: 'ruby' },
+          { text: 'SQL', value: 'sql' },
+          { text: 'Bash', value: 'bash' },
+          { text: 'JSON', value: 'json' }
+        ],
+        // 自定义样式
+        content_css: [
+          'https://cdnjs.cloudflare.com/ajax/libs/prism/1.29.0/themes/prism-tomorrow.min.css'
+        ],
+        // 适配深色模式
+        skin: document.documentElement.classList.contains('dark') ? 'oxide-dark' : 'oxide',
+        content_css: document.documentElement.classList.contains('dark') ? 'dark' : 'default',
+        init_instance_callback: (editor) => {
+          console.log('Editor instance initialized');
+        }
+      });
+    } else {
+      console.error('TinyMCE not loaded');
+    }
+  });
+</script>
+
+<style>
+  /* 编辑器容器样式 */
+  .editor-wrapper {
+    @apply mb-4 border dark:border-gray-700 rounded-lg overflow-hidden;
+  }
+
+  /* 适配深色模式 */
+  :global(.dark) .editor-wrapper {
+    --tox-bg-color: theme('colors.gray.800');
+    --tox-text-color: theme('colors.gray.200');
+    --tox-border-color: theme('colors.gray.700');
+  }
+
+  /* 编辑器工具栏样式 */
+  :global(.tox-toolbar) {
+    @apply border-b dark:border-gray-700;
+  }
+
+  /* 编辑器按钮样式 */
+  :global(.tox-tbtn) {
+    @apply hover:bg-gray-100 dark:hover:bg-gray-700;
+  }
+
+  /* 编辑器下拉菜单样式 */
+  :global(.tox-menu) {
+    @apply bg-white dark:bg-gray-800 border dark:border-gray-700;
+  }
+
+  :global(.tox-collection__item) {
+    @apply hover:bg-gray-100 dark:hover:bg-gray-700;
+  }
+
+  /* 编辑器对话框样式 */
+  :global(.tox-dialog) {
+    @apply bg-white dark:bg-gray-800 border dark:border-gray-700;
+  }
+
+  :global(.tox-dialog__header) {
+    @apply bg-gray-50 dark:bg-gray-900;
+  }
+
+  :global(.tox-dialog__footer) {
+    @apply bg-gray-50 dark:bg-gray-900;
+  }
+
+  /* 编辑器输入框样式 */
+  :global(.tox-textfield),
+  :global(.tox-textarea) {
+    @apply bg-white dark:bg-gray-700 border dark:border-gray-600;
+  }
+
+  /* 编辑器按钮样式 */
+  :global(.tox-button) {
+    @apply bg-blue-500 hover:bg-blue-600 text-white border-none;
+  }
+
+  :global(.tox-button--secondary) {
+    @apply bg-gray-500 hover:bg-gray-600 text-white border-none;
+  }
+
+  /* 禁用状态的按钮样式 */
+  button:disabled {
+    @apply opacity-50 cursor-not-allowed;
+  }
+
+  /* 隐藏原始 textarea */
+  .hidden {
+    display: none !important;
+  }
+</style> 

@@ -1,0 +1,45 @@
+# 依赖目录
+node_modules/
+
+# 构建输出
+dist/
+.output/
+
+# 环境变量文件
+.env
+.env.*
+!.env.example
+
+# 数据库文件
+data/*.db
+data/*.db-journal
+
+# 系统文件
+.DS_Store
+Thumbs.db
+
+# IDE 配置
+.idea/
+.vscode/
+*.sublime-project
+*.sublime-workspace
+
+# 日志文件
+*.log
+npm-debug.log*
+yarn-debug.log*
+yarn-error.log*
+
+# 临时文件
+tmp/
+.tmp/
+.cache/
+.astro/
+
+# 上传的文件
+public/uploads/
+
+# 其他
+*.bak
+*.swp
+*.swo 

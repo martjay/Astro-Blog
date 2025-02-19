@@ -1,0 +1,36 @@
+---
+interface Props {
+  currentPage: number;
+  totalPages: number;
+  baseUrl: string;
+}
+
+const { currentPage, totalPages, baseUrl } = Astro.props;
+
+const prevUrl = currentPage > 1 ? `${baseUrl}/${currentPage - 1}` : null;
+const nextUrl = currentPage < totalPages ? `${baseUrl}/${currentPage + 1}` : null;
+---
+
+<nav class="flex justify-center space-x-4 my-8">
+  {prevUrl && (
+    <a
+      href={prevUrl}
+      class="px-4 py-2 bg-gray-100 dark:bg-gray-800 rounded-lg hover:bg-gray-200 dark:hover:bg-gray-700"
+    >
+      上一页
+    </a>
+  )}
+  
+  <span class="px-4 py-2">
+    第 {currentPage} 页，共 {totalPages} 页
+  </span>
+  
+  {nextUrl && (
+    <a
+      href={nextUrl}
+      class="px-4 py-2 bg-gray-100 dark:bg-gray-800 rounded-lg hover:bg-gray-200 dark:hover:bg-gray-700"
+    >
+      下一页
+    </a>
+  )}
+</nav> 

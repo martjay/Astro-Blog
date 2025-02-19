@@ -1,0 +1,688 @@
+---
+import BaseLayout from '../../layouts/BaseLayout.astro';
+import { requireAuth } from '../../middleware/auth';
+import { comments } from '../../lib/db';
+
+// 验证管理员身份
+const authResponse = await requireAuth(Astro);
+if (authResponse) return authResponse;
+
+// 获取所有评论
+const allComments = comments.getAllForAdmin();
+
+// 获取违禁昵称和违禁词
+const forbiddenNicknames = comments.getForbiddenNicknames();
+const forbiddenWords = comments.getForbiddenWords();
+
+// 按状态分组评论
+const pendingComments = allComments.filter(comment => comment.status === 'pending');
+const approvedComments = allComments.filter(comment => comment.status === 'approved');
+const spamComments = allComments.filter(comment => comment.status === 'spam');
+const rejectedComments = allComments.filter(comment => comment.status === 'rejected');
+---
+
+<BaseLayout title="评论管理">
+  <div class="container mx-auto px-4 py-8">
+    <!-- 返回按钮 -->
+    <div class="mb-6">
+      <a
+        href="/admin/posts"
+        class="inline-flex items-center gap-2 text-gray-600 dark:text-gray-400 hover:text-blue-500 dark:hover:text-blue-400 transition-colors"
+      >
+        <svg class="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+          <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M10 19l-7-7m0 0l7-7m-7 7h18"></path>
+        </svg>
+        <span>返回后台首页</span>
+      </a>
+    </div>
+
+    <div class="max-w-6xl mx-auto">
+      <div class="flex justify-between items-center mb-8">
+        <h1 class="text-2xl font-bold">评论管理</h1>
+        <div class="flex gap-4">
+          <button
+            onclick="openForbiddenWordsModal()"
+            class="px-4 py-2 bg-purple-500 text-white rounded-lg hover:bg-purple-600 transition-colors"
+          >
+            违禁词管理
+          </button>
+          <button
+            onclick="exportComments()"
+            class="px-4 py-2 bg-green-500 text-white rounded-lg hover:bg-green-600 transition-colors"
+          >
+            导出评论
+          </button>
+        </div>
+      </div>
+
+      <!-- 评论统计 -->
+      <div class="grid grid-cols-4 gap-4 mb-8">
+        <div class="bg-white dark:bg-gray-800 rounded-lg p-4 shadow">
+          <h3 class="text-lg font-semibold mb-2">待审核</h3>
+          <p class="text-2xl font-bold text-yellow-500">{pendingComments.length}</p>
+        </div>
+        <div class="bg-white dark:bg-gray-800 rounded-lg p-4 shadow">
+          <h3 class="text-lg font-semibold mb-2">已通过</h3>
+          <p class="text-2xl font-bold text-green-500">{approvedComments.length}</p>
+        </div>
+        <div class="bg-white dark:bg-gray-800 rounded-lg p-4 shadow">
+          <h3 class="text-lg font-semibold mb-2">垃圾评论</h3>
+          <p class="text-2xl font-bold text-red-500">{spamComments.length}</p>
+        </div>
+        <div class="bg-white dark:bg-gray-800 rounded-lg p-4 shadow">
+          <h3 class="text-lg font-semibold mb-2">已拒绝</h3>
+          <p class="text-2xl font-bold text-gray-500">{rejectedComments.length}</p>
+        </div>
+      </div>
+
+      <!-- 评论列表 -->
+      <div class="space-y-8">
+        {/* 待审核评论 */}
+        <section>
+          <h2 class="text-xl font-bold mb-4">待审核评论</h2>
+          <div class="space-y-4">
+            {pendingComments.map(comment => (
+              <div class="bg-white dark:bg-gray-800 rounded-lg p-4 shadow">
+                <div class="flex justify-between items-start mb-2">
+                  <div>
+                    <span class="font-medium">{comment.author}</span>
+                    <span class="text-sm text-gray-500 ml-2">
+                      {new Date(comment.created_at).toLocaleString('zh-CN')}
+                    </span>
+                  </div>
+                  <div class="flex gap-2">
+                    <button
+                      onclick={`updateStatus(${comment.id}, 'approved')`}
+                      class="px-3 py-1 bg-green-500 text-white rounded hover:bg-green-600"
+                    >
+                      通过
+                    </button>
+                    <button
+                      onclick={`updateStatus(${comment.id}, 'spam')`}
+                      class="px-3 py-1 bg-yellow-500 text-white rounded hover:bg-yellow-600"
+                    >
+                      标记垃圾
+                    </button>
+                    <button
+                      onclick={`updateStatus(${comment.id}, 'rejected')`}
+                      class="px-3 py-1 bg-red-500 text-white rounded hover:bg-red-600"
+                    >
+                      拒绝
+                    </button>
+                  </div>
+                </div>
+                <p class="text-gray-600 dark:text-gray-400">{comment.content}</p>
+                <div class="mt-2 text-sm text-gray-500">
+                  文章: {comment.post_slug}
+                  {comment.ip && <span class="ml-4">IP: {comment.ip}</span>}
+                </div>
+              </div>
+            ))}
+            {pendingComments.length === 0 && (
+              <div class="text-center py-8 text-gray-500">
+                暂无待审核评论
+              </div>
+            )}
+          </div>
+        </section>
+
+        {/* 已通过评论 */}
+        <section>
+          <h2 class="text-xl font-bold mb-4">已通过评论</h2>
+          <div class="space-y-4">
+            {approvedComments.map(comment => (
+              <div class="bg-white dark:bg-gray-800 rounded-lg p-4 shadow">
+                <div class="flex justify-between items-start mb-2">
+                  <div>
+                    <span class="font-medium">{comment.author}</span>
+                    <span class="text-sm text-gray-500 ml-2">
+                      {new Date(comment.created_at).toLocaleString('zh-CN')}
+                    </span>
+                  </div>
+                  <div class="flex gap-2">
+                    <button
+                      onclick={`updateStatus(${comment.id}, 'spam')`}
+                      class="px-3 py-1 bg-yellow-500 text-white rounded hover:bg-yellow-600"
+                    >
+                      标记垃圾
+                    </button>
+                    <button
+                      onclick={`updateStatus(${comment.id}, 'rejected')`}
+                      class="px-3 py-1 bg-red-500 text-white rounded hover:bg-red-600"
+                    >
+                      拒绝
+                    </button>
+                    <button
+                      onclick={`deleteComment(${comment.id})`}
+                      class="px-3 py-1 bg-gray-500 text-white rounded hover:bg-gray-600"
+                    >
+                      删除
+                    </button>
+                  </div>
+                </div>
+                <p class="text-gray-600 dark:text-gray-400">{comment.content}</p>
+                <div class="mt-2 text-sm text-gray-500">
+                  文章: {comment.post_slug}
+                  {comment.ip && <span class="ml-4">IP: {comment.ip}</span>}
+                </div>
+              </div>
+            ))}
+            {approvedComments.length === 0 && (
+              <div class="text-center py-8 text-gray-500">
+                暂无已通过评论
+              </div>
+            )}
+          </div>
+        </section>
+
+        {/* 垃圾评论 */}
+        <section>
+          <h2 class="text-xl font-bold mb-4">垃圾评论</h2>
+          <div class="space-y-4">
+            {spamComments.map(comment => (
+              <div class="bg-white dark:bg-gray-800 rounded-lg p-4 shadow">
+                <div class="flex justify-between items-start mb-2">
+                  <div>
+                    <span class="font-medium">{comment.author}</span>
+                    <span class="text-sm text-gray-500 ml-2">
+                      {new Date(comment.created_at).toLocaleString('zh-CN')}
+                    </span>
+                  </div>
+                  <div class="flex gap-2">
+                    <button
+                      onclick={`updateStatus(${comment.id}, 'approved')`}
+                      class="px-3 py-1 bg-green-500 text-white rounded hover:bg-green-600"
+                    >
+                      不是垃圾
+                    </button>
+                    <button
+                      onclick={`deleteComment(${comment.id})`}
+                      class="px-3 py-1 bg-red-500 text-white rounded hover:bg-red-600"
+                    >
+                      删除
+                    </button>
+                  </div>
+                </div>
+                <p class="text-gray-600 dark:text-gray-400">{comment.content}</p>
+                <div class="mt-2 text-sm text-gray-500">
+                  文章: {comment.post_slug}
+                  {comment.ip && <span class="ml-4">IP: {comment.ip}</span>}
+                </div>
+              </div>
+            ))}
+            {spamComments.length === 0 && (
+              <div class="text-center py-8 text-gray-500">
+                暂无垃圾评论
+              </div>
+            )}
+          </div>
+        </section>
+      </div>
+    </div>
+  </div>
+
+  <!-- 违禁词管理模态框 -->
+  <div id="forbidden-words-modal" class="fixed inset-0 z-50 hidden">
+    <div class="absolute inset-0 bg-black/50" onclick="closeForbiddenWordsModal()"></div>
+    <div class="absolute inset-8 bg-white dark:bg-gray-800 rounded-xl shadow-2xl overflow-hidden">
+      <div class="h-full flex flex-col">
+        <!-- 模态框头部 -->
+        <div class="p-6 border-b dark:border-gray-700">
+          <div class="flex justify-between items-center">
+            <h2 class="text-2xl font-bold">违禁词管理</h2>
+            <button
+              onclick="closeForbiddenWordsModal()"
+              class="text-gray-500 hover:text-gray-700"
+            >
+              <svg class="w-6 h-6" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M6 18L18 6M6 6l12 12"></path>
+              </svg>
+            </button>
+          </div>
+        </div>
+
+        <!-- 模态框内容 -->
+        <div class="flex-1 overflow-auto p-6">
+          <form id="forbidden-words-form" class="space-y-6">
+            <!-- 禁止昵称 -->
+            <div>
+              <label class="block text-lg font-bold mb-2">禁止昵称</label>
+              <p class="text-sm text-gray-500 dark:text-gray-400 mb-2">
+                多个昵称请用英文逗号分隔，例如：admin,管理员,站长
+              </p>
+              <textarea
+                id="forbidden-nicknames"
+                name="forbidden_nicknames"
+                rows="4"
+                class="w-full px-3 py-2 border dark:border-gray-700 rounded-lg bg-transparent"
+                placeholder="admin,管理员,站长,版主,超级管理员"
+              >{forbiddenNicknames.map(item => item.nickname).join(',')}</textarea>
+            </div>
+
+            <!-- 违禁词 -->
+            <div>
+              <label class="block text-lg font-bold mb-2">违禁词</label>
+              <p class="text-sm text-gray-500 dark:text-gray-400 mb-2">
+                多个违禁词请用英文逗号分隔，例如：暴力,色情,赌博
+              </p>
+              <textarea
+                id="forbidden-words"
+                name="forbidden_words"
+                rows="4"
+                class="w-full px-3 py-2 border dark:border-gray-700 rounded-lg bg-transparent"
+                placeholder="暴力,色情,赌博,博彩,.com,.net"
+              >{forbiddenWords.map(item => item.word).join(',')}</textarea>
+            </div>
+
+            <div class="flex justify-end">
+              <button
+                type="submit"
+                class="px-6 py-2 bg-blue-500 text-white rounded-lg hover:bg-blue-600"
+              >
+                保存设置
+              </button>
+            </div>
+          </form>
+        </div>
+      </div>
+    </div>
+  </div>
+
+  <!-- 添加违禁昵称表单 -->
+  <div id="add-nickname-modal" class="fixed inset-0 z-50 hidden">
+    <div class="absolute inset-0 bg-black/50" onclick="closeAddNicknameForm()"></div>
+    <div class="absolute top-1/2 left-1/2 -translate-x-1/2 -translate-y-1/2 w-full max-w-md bg-white dark:bg-gray-800 rounded-xl shadow-2xl p-6">
+      <h3 class="text-xl font-bold mb-4">添加禁止昵称</h3>
+      <form id="add-nickname-form" class="space-y-4">
+        <div>
+          <label class="block text-sm font-medium mb-1">昵称</label>
+          <input
+            type="text"
+            name="nickname"
+            required
+            class="w-full px-3 py-2 border dark:border-gray-700 rounded-lg bg-transparent"
+          />
+        </div>
+        <div>
+          <label class="block text-sm font-medium mb-1">分类</label>
+          <select
+            name="category"
+            required
+            class="w-full px-3 py-2 border dark:border-gray-700 rounded-lg bg-transparent"
+          >
+            <option value="admin">管理员相关</option>
+            <option value="role">角色相关</option>
+            <option value="system">系统相关</option>
+            <option value="other">其他</option>
+          </select>
+        </div>
+        <div>
+          <label class="block text-sm font-medium mb-1">描述（可选）</label>
+          <input
+            type="text"
+            name="description"
+            class="w-full px-3 py-2 border dark:border-gray-700 rounded-lg bg-transparent"
+          />
+        </div>
+        <div class="flex justify-end gap-4">
+          <button
+            type="button"
+            onclick="closeAddNicknameForm()"
+            class="px-4 py-2 text-gray-500 hover:text-gray-700"
+          >
+            取消
+          </button>
+          <button
+            type="submit"
+            class="px-4 py-2 bg-blue-500 text-white rounded-lg hover:bg-blue-600"
+          >
+            添加
+          </button>
+        </div>
+      </form>
+    </div>
+  </div>
+
+  <!-- 添加违禁词表单 -->
+  <div id="add-word-modal" class="fixed inset-0 z-50 hidden">
+    <div class="absolute inset-0 bg-black/50" onclick="closeAddWordForm()"></div>
+    <div class="absolute top-1/2 left-1/2 -translate-x-1/2 -translate-y-1/2 w-full max-w-md bg-white dark:bg-gray-800 rounded-xl shadow-2xl p-6">
+      <h3 class="text-xl font-bold mb-4">添加违禁词</h3>
+      <form id="add-word-form" class="space-y-4">
+        <div>
+          <label class="block text-sm font-medium mb-1">违禁词</label>
+          <input
+            type="text"
+            name="word"
+            required
+            class="w-full px-3 py-2 border dark:border-gray-700 rounded-lg bg-transparent"
+          />
+        </div>
+        <div>
+          <label class="block text-sm font-medium mb-1">分类</label>
+          <select
+            name="category"
+            required
+            class="w-full px-3 py-2 border dark:border-gray-700 rounded-lg bg-transparent"
+          >
+            <option value="violence">暴力相关</option>
+            <option value="porn">色情相关</option>
+            <option value="domain">域名相关</option>
+            <option value="other">其他</option>
+          </select>
+        </div>
+        <div>
+          <label class="block text-sm font-medium mb-1">描述（可选）</label>
+          <input
+            type="text"
+            name="description"
+            class="w-full px-3 py-2 border dark:border-gray-700 rounded-lg bg-transparent"
+          />
+        </div>
+        <div class="flex justify-end gap-4">
+          <button
+            type="button"
+            onclick="closeAddWordForm()"
+            class="px-4 py-2 text-gray-500 hover:text-gray-700"
+          >
+            取消
+          </button>
+          <button
+            type="submit"
+            class="px-4 py-2 bg-blue-500 text-white rounded-lg hover:bg-blue-600"
+          >
+            添加
+          </button>
+        </div>
+      </form>
+    </div>
+  </div>
+</BaseLayout>
+
+<script>
+  // 更新评论状态
+  async function updateStatus(id, status) {
+    if (!confirm(`确定要将评论状态更改为 ${status} 吗？`)) return;
+
+    try {
+      const response = await fetch('/api/comments/status', {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json'
+        },
+        body: JSON.stringify({ id, status })
+      });
+
+      if (response.ok) {
+        location.reload();
+      } else {
+        const data = await response.json();
+        alert(data.error || '更新失败');
+      }
+    } catch (error) {
+      console.error('Error:', error);
+      alert('更新失败');
+    }
+  }
+
+  // 删除评论
+  async function deleteComment(id) {
+    if (!confirm('确定要删除这条评论吗？此操作不可恢复！')) return;
+
+    try {
+      const response = await fetch(`/api/comments/${id}`, {
+        method: 'DELETE',
+        headers: {
+          'Content-Type': 'application/json'
+        }
+      });
+
+      if (response.ok) {
+        location.reload();
+      } else {
+        const data = await response.json();
+        alert(data.error || '删除失败');
+      }
+    } catch (error) {
+      console.error('Error:', error);
+      alert('删除失败');
+    }
+  }
+
+  // 导出评论
+  async function exportComments() {
+    try {
+      window.location.href = '/api/comments/export';
+    } catch (error) {
+      console.error('Error:', error);
+      alert('导出失败');
+    }
+  }
+
+  // 违禁词管理相关函数
+  function openForbiddenWordsModal() {
+    document.getElementById('forbidden-words-modal').classList.remove('hidden');
+    document.body.style.overflow = 'hidden';
+  }
+
+  function closeForbiddenWordsModal() {
+    document.getElementById('forbidden-words-modal').classList.add('hidden');
+    document.body.style.overflow = '';
+  }
+
+  // 禁止昵称管理
+  function openAddNicknameForm() {
+    document.getElementById('add-nickname-modal').classList.remove('hidden');
+  }
+
+  function closeAddNicknameForm() {
+    document.getElementById('add-nickname-modal').classList.add('hidden');
+  }
+
+  document.getElementById('add-nickname-form')?.addEventListener('submit', async (e) => {
+    e.preventDefault();
+    const formData = new FormData(e.target);
+    
+    try {
+      const response = await fetch('/api/forbidden-nicknames', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          nickname: formData.get('nickname'),
+          category: formData.get('category'),
+          description: formData.get('description')
+        })
+      });
+
+      if (response.ok) {
+        location.reload();
+      } else {
+        const data = await response.json();
+        alert(data.error || '添加失败');
+      }
+    } catch (error) {
+      console.error('Error:', error);
+      alert('添加失败');
+    }
+  });
+
+  async function removeForbiddenNickname(id) {
+    if (!confirm('确定要删除这个禁止昵称吗？')) return;
+
+    try {
+      const response = await fetch(`/api/forbidden-nicknames/${id}`, {
+        method: 'DELETE'
+      });
+
+      if (response.ok) {
+        location.reload();
+      } else {
+        const data = await response.json();
+        alert(data.error || '删除失败');
+      }
+    } catch (error) {
+      console.error('Error:', error);
+      alert('删除失败');
+    }
+  }
+
+  // 违禁词管理
+  function openAddWordForm() {
+    document.getElementById('add-word-modal').classList.remove('hidden');
+  }
+
+  function closeAddWordForm() {
+    document.getElementById('add-word-modal').classList.add('hidden');
+  }
+
+  document.getElementById('add-word-form')?.addEventListener('submit', async (e) => {
+    e.preventDefault();
+    const formData = new FormData(e.target);
+    
+    try {
+      const response = await fetch('/api/forbidden-words', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          word: formData.get('word'),
+          category: formData.get('category'),
+          description: formData.get('description')
+        })
+      });
+
+      if (response.ok) {
+        location.reload();
+      } else {
+        const data = await response.json();
+        alert(data.error || '添加失败');
+      }
+    } catch (error) {
+      console.error('Error:', error);
+      alert('添加失败');
+    }
+  });
+
+  async function removeForbiddenWord(id) {
+    if (!confirm('确定要删除这个违禁词吗？')) return;
+
+    try {
+      const response = await fetch(`/api/forbidden-words/${id}`, {
+        method: 'DELETE'
+      });
+
+      if (response.ok) {
+        location.reload();
+      } else {
+        const data = await response.json();
+        alert(data.error || '删除失败');
+      }
+    } catch (error) {
+      console.error('Error:', error);
+      alert('删除失败');
+    }
+  }
+
+  // 修改违禁词管理相关函数
+  document.getElementById('forbidden-words-form')?.addEventListener('submit', async (e) => {
+    e.preventDefault();
+    const formData = new FormData(e.target);
+    
+    try {
+      const response = await fetch('/api/forbidden-words/batch', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          nicknames: formData.get('forbidden_nicknames')?.toString().split(',').map(s => s.trim()).filter(Boolean) || [],
+          words: formData.get('forbidden_words')?.toString().split(',').map(s => s.trim()).filter(Boolean) || []
+        })
+      });
+
+      if (response.ok) {
+        location.reload();
+      } else {
+        const data = await response.json();
+        alert(data.error || '保存失败');
+      }
+    } catch (error) {
+      console.error('Error:', error);
+      alert('保存失败');
+    }
+  });
+
+  // 声明全局函数
+  declare global {
+    function openForbiddenWordsModal(): void;
+    function closeForbiddenWordsModal(): void;
+    function openAddNicknameForm(): void;
+    function closeAddNicknameForm(): void;
+    function removeForbiddenNickname(id: number): void;
+    function openAddWordForm(): void;
+    function closeAddWordForm(): void;
+    function removeForbiddenWord(id: number): void;
+    function updateStatus(id: number, status: string): void;
+    function deleteComment(id: number): void;
+    function exportComments(): void;
+  }
+
+  window.openForbiddenWordsModal = openForbiddenWordsModal;
+  window.closeForbiddenWordsModal = closeForbiddenWordsModal;
+  window.openAddNicknameForm = openAddNicknameForm;
+  window.closeAddNicknameForm = closeAddNicknameForm;
+  window.removeForbiddenNickname = removeForbiddenNickname;
+  window.openAddWordForm = openAddWordForm;
+  window.closeAddWordForm = closeAddWordForm;
+  window.removeForbiddenWord = removeForbiddenWord;
+  window.updateStatus = updateStatus;
+  window.deleteComment = deleteComment;
+  window.exportComments = exportComments;
+</script>
+
+<style>
+  /* 网格背景 */
+  .bg-grid-white {
+    mask-image: linear-gradient(to bottom, transparent, black, transparent);
+  }
+  .bg-grid-12 {
+    background-image: 
+      linear-gradient(to right, rgb(255 255 255 / 0.05) 1px, transparent 1px),
+      linear-gradient(to bottom, rgb(255 255 255 / 0.05) 1px, transparent 1px);
+    background-size: 24px 24px;
+  }
+
+  /* 动画 */
+  .animate-fade-in {
+    animation: fadeIn 0.8s ease-out forwards;
+  }
+
+  .animation-delay-200 {
+    animation-delay: 0.2s;
+  }
+
+  .animation-delay-300 {
+    animation-delay: 0.3s;
+  }
+
+  @keyframes fadeIn {
+    from {
+      opacity: 0;
+      transform: translateY(20px);
+    }
+    to {
+      opacity: 1;
+      transform: translateY(0);
+    }
+  }
+
+  /* 渐变文本 */
+  .gradient-text {
+    @apply bg-clip-text text-transparent bg-gradient-to-r from-blue-500 to-purple-600;
+  }
+
+  /* 响应式调整 */
+  @media (max-width: 768px) {
+    .container {
+      padding-left: 1rem;
+      padding-right: 1rem;
+    }
+  }
+</style> 

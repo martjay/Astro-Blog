@@ -1,0 +1,146 @@
+---
+import BaseLayout from '../../layouts/BaseLayout.astro';
+import { requireAuth } from '../../middleware/auth';
+import { settings } from '../../lib/settings';
+import Editor from '../../components/Editor.astro';
+
+// 验证管理员身份
+const authResponse = await requireAuth(Astro);
+if (authResponse) return authResponse;
+
+// 获取当前内容
+const content = settings.getAboutContent();
+
+// 获取更新历史
+const history = settings.getAboutHistory();
+
+// 处理表单提交
+if (Astro.request.method === 'POST') {
+  const formData = await Astro.request.formData();
+  const newContent = formData.get('content')?.toString() || '';
+  
+  settings.updateAboutContent(newContent);
+  return Astro.redirect('/admin/about?success=true');
+}
+
+const success = Astro.url.searchParams.get('success') === 'true';
+---
+
+<BaseLayout title="编辑关于页面">
+  <div class="container mx-auto px-4 py-8">
+    <div class="max-w-4xl mx-auto">
+      <div class="flex justify-between items-center mb-8">
+        <h1 class="text-2xl font-bold">编辑关于页面</h1>
+        <div class="flex gap-4">
+          <a
+            href="/about"
+            target="_blank"
+            class="px-4 py-2 bg-gray-500 text-white rounded-lg hover:bg-gray-600 transition-colors"
+          >
+            预览
+          </a>
+          <a
+            href="/admin/posts"
+            class="px-4 py-2 bg-blue-500 text-white rounded-lg hover:bg-blue-600 transition-colors"
+          >
+            返回
+          </a>
+        </div>
+      </div>
+
+      {success && (
+        <div class="mb-8 p-4 bg-green-100 dark:bg-green-900 text-green-800 dark:text-green-200 rounded-lg">
+          更新成功
+        </div>
+      )}
+
+      <form method="POST" id="about-form" class="space-y-6">
+        <div class="bg-white dark:bg-gray-800 rounded-lg shadow-lg p-6">
+          <Editor
+            id="content"
+            name="content"
+            value={content}
+            required={true}
+          />
+        </div>
+
+        <div class="flex justify-end">
+          <button
+            type="submit"
+            class="px-6 py-2 bg-blue-500 text-white rounded-lg hover:bg-blue-600 transition-colors"
+          >
+            保存更改
+          </button>
+        </div>
+      </form>
+
+      <!-- 更新历史 -->
+      {history.length > 1 && (
+        <div class="mt-12">
+          <h2 class="text-xl font-bold mb-4">更新历史</h2>
+          <div class="bg-white dark:bg-gray-800 rounded-lg shadow-lg overflow-hidden">
+            <table class="w-full">
+              <thead class="bg-gray-50 dark:bg-gray-700">
+                <tr>
+                  <th class="px-4 py-2 text-left">更新时间</th>
+                  <th class="px-4 py-2 text-left">操作</th>
+                </tr>
+              </thead>
+              <tbody>
+                {history.map((record, index) => (
+                  <tr class="border-t dark:border-gray-700">
+                    <td class="px-4 py-2">
+                      {new Date(record.updated_at).toLocaleString('zh-CN')}
+                    </td>
+                    <td class="px-4 py-2">
+                      <button
+                        type="button"
+                        onclick={`restoreVersion(${record.id})`}
+                        class="text-blue-500 hover:text-blue-600"
+                        disabled={index === 0}
+                      >
+                        还原此版本
+                      </button>
+                    </td>
+                  </tr>
+                ))}
+              </tbody>
+            </table>
+          </div>
+        </div>
+      )}
+    </div>
+  </div>
+</BaseLayout>
+
+<script>
+  // 还原历史版本
+  async function restoreVersion(id: number) {
+    if (!confirm('确定要还原到此版本吗？')) return;
+
+    try {
+      const response = await fetch('/api/about/restore', {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json'
+        },
+        body: JSON.stringify({ id })
+      });
+
+      if (response.ok) {
+        location.reload();
+      } else {
+        alert('还原失败，请重试');
+      }
+    } catch (error) {
+      console.error('Error:', error);
+      alert('还原失败，请重试');
+    }
+  }
+
+  // 声明全局函数
+  declare global {
+    function restoreVersion(id: number): void;
+  }
+  window.restoreVersion = restoreVersion;
+</script> 

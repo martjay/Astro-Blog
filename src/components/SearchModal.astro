@@ -1,0 +1,155 @@
+---
+---
+<div
+  x-data="searchModal"
+  @keydown.window.escape="closeSearch()"
+  @keydown.window.slash.prevent="openSearch()"
+>
+  <button
+    @click="openSearch()"
+    class="p-2 hover:bg-gray-100 dark:hover:bg-gray-800 rounded-lg flex items-center gap-2"
+  >
+    <svg xmlns="http://www.w3.org/2000/svg" class="h-5 w-5" viewBox="0 0 20 20" fill="currentColor">
+      <path fill-rule="evenodd" d="M8 4a4 4 0 100 8 4 4 0 000-8zM2 8a6 6 0 1110.89 3.476l4.817 4.817a1 1 0 01-1.414 1.414l-4.816-4.816A6 6 0 012 8z" clip-rule="evenodd" />
+    </svg>
+    <span class="hidden sm:inline">搜索</span>
+    <span class="text-sm text-gray-400">/</span>
+  </button>
+
+  <!-- 搜索模态框 -->
+  <div
+    x-show="isOpen"
+    x-transition:enter="transition ease-out duration-200"
+    x-transition:enter-start="opacity-0"
+    x-transition:enter-end="opacity-100"
+    x-transition:leave="transition ease-in duration-200"
+    x-transition:leave-start="opacity-100"
+    x-transition:leave-end="opacity-0"
+    class="fixed inset-0 z-50 overflow-y-auto"
+    style="display: none;"
+  >
+    <div class="min-h-screen px-4 text-center">
+      <div
+        @click="closeSearch()"
+        class="fixed inset-0 bg-black bg-opacity-30 transition-opacity"
+      ></div>
+
+      <div
+        class="inline-block w-full max-w-2xl my-8 p-4 text-left align-middle transition-all transform bg-white dark:bg-gray-800 shadow-xl rounded-lg"
+      >
+        <div class="relative">
+          <input
+            x-ref="searchInput"
+            x-model="searchQuery"
+            @input="updateResults($event.target.value)"
+            @keydown.arrow-down.prevent="navigateResults('down')"
+            @keydown.arrow-up.prevent="navigateResults('up')"
+            @keydown.enter="goToResult()"
+            type="text"
+            placeholder="搜索文章..."
+            class="w-full p-4 bg-gray-100 dark:bg-gray-700 rounded-lg focus:outline-none"
+          />
+        </div>
+
+        <div class="mt-4 max-h-96 overflow-y-auto">
+          <template x-if="results.length === 0 && searchQuery">
+            <p class="text-gray-500 dark:text-gray-400 p-4">未找到相关文章</p>
+          </template>
+
+          <template x-for="(result, index) in results" :key="result.slug">
+            <a
+              :href="`/blog/${result.slug}`"
+              @click="closeSearch()"
+              :class="{'bg-gray-100 dark:bg-gray-700': selectedIndex === index}"
+              class="block p-4 hover:bg-gray-100 dark:hover:bg-gray-700 rounded-lg"
+            >
+              <h3 x-text="result.title" class="font-medium"></h3>
+              <p x-text="result.description" class="text-sm text-gray-600 dark:text-gray-400"></p>
+            </a>
+          </template>
+        </div>
+      </div>
+    </div>
+  </div>
+</div>
+
+<script>
+  if (typeof window !== 'undefined') {
+    document.addEventListener('alpine:init', () => {
+      Alpine.data('searchModal', () => ({
+        isOpen: false,
+        searchQuery: '',
+        results: [],
+        selectedIndex: 0,
+        posts: [],
+
+        async init() {
+          try {
+            const response = await fetch('/search-index.json');
+            if (!response.ok) {
+              throw new Error(`HTTP error! status: ${response.status}`);
+            }
+            this.posts = await response.json();
+          } catch (error) {
+            console.error('Error loading search index:', error);
+            this.posts = [];
+          }
+        },
+
+        openSearch() {
+          this.isOpen = true;
+          this.searchQuery = '';
+          this.results = [];
+          this.selectedIndex = 0;
+          setTimeout(() => {
+            if (this.$refs.searchInput) {
+              this.$refs.searchInput.focus();
+            }
+          }, 50);
+        },
+
+        closeSearch() {
+          this.isOpen = false;
+          this.searchQuery = '';
+          this.results = [];
+        },
+
+        navigateResults(direction) {
+          if (this.results.length === 0) return;
+          
+          if (direction === 'down') {
+            this.selectedIndex = (this.selectedIndex + 1) % this.results.length;
+          } else {
+            this.selectedIndex = this.selectedIndex <= 0 ? this.results.length - 1 : this.selectedIndex - 1;
+          }
+        },
+
+        goToResult() {
+          const selected = this.results[this.selectedIndex];
+          if (selected) {
+            window.location.href = `/blog/${selected.slug}`;
+            this.closeSearch();
+          }
+        },
+
+        updateResults(query) {
+          this.searchQuery = query;
+          
+          if (!query) {
+            this.results = [];
+            return;
+          }
+
+          const searchTerm = query.toLowerCase();
+          this.results = this.posts
+            .filter(post => 
+              post.title?.toLowerCase().includes(searchTerm) ||
+              post.description?.toLowerCase().includes(searchTerm)
+            )
+            .slice(0, 5);
+          this.selectedIndex = 0;
+        }
+      }));
+    });
+  }
+</script> 

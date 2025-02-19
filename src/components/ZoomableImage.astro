@@ -1,0 +1,80 @@
+---
+interface Props {
+  src: string;
+  alt: string;
+  class?: string;
+}
+
+const { src, alt, class: className = "" } = Astro.props;
+---
+
+<div class="zoomable-image-container">
+  <img
+    src={src}
+    alt={alt}
+    class={`cursor-zoom-in transition-opacity hover:opacity-90 ${className}`}
+    loading="lazy"
+  />
+</div>
+
+<script>
+  class ZoomableImage extends HTMLElement {
+    constructor() {
+      super();
+      
+      const img = this.querySelector('img');
+      if (!img) return;
+
+      img.addEventListener('click', () => {
+        const overlay = document.createElement('div');
+        overlay.className = 'fixed inset-0 z-[9999] bg-black/95 flex items-center justify-center';
+        
+        const zoomedImg = document.createElement('img');
+        zoomedImg.src = img.src;
+        zoomedImg.alt = img.alt;
+        zoomedImg.className = 'max-w-[90vw] max-h-[90vh] object-contain';
+        
+        const closeBtn = document.createElement('button');
+        closeBtn.className = 'absolute top-4 right-4 text-white hover:text-gray-300';
+        closeBtn.innerHTML = `
+          <svg class="w-8 h-8" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+            <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M6 18L18 6M6 6l12 12" />
+          </svg>
+        `;
+        
+        const close = () => {
+          overlay.remove();
+          document.body.style.overflow = '';
+        };
+        
+        closeBtn.addEventListener('click', close);
+        overlay.addEventListener('click', (e) => {
+          if (e.target === overlay) close();
+        });
+        document.addEventListener('keydown', (e) => {
+          if (e.key === 'Escape') close();
+        });
+        
+        overlay.appendChild(zoomedImg);
+        overlay.appendChild(closeBtn);
+        document.body.appendChild(overlay);
+        document.body.style.overflow = 'hidden';
+      });
+    }
+  }
+
+  customElements.define('zoomable-image', ZoomableImage);
+</script>
+
+<style>
+  .zoomable-image-container {
+    display: block;
+    width: 100%;
+  }
+
+  .zoomable-image-container img {
+    max-width: 100%;
+    height: auto;
+    border-radius: 0.5rem;
+  }
+</style> 

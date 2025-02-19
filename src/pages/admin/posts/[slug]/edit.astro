@@ -1,0 +1,398 @@
+---
+import BaseLayout from '../../../../layouts/BaseLayout.astro';
+import { requireAuth } from '../../../../middleware/auth';
+import { getCollection } from 'astro:content';
+import matter from 'gray-matter';
+import Editor from '../../../../components/Editor.astro';
+import { categories } from '../../../../lib/categories';
+
+// 验证管理员身份
+const authResponse = await requireAuth(Astro);
+if (authResponse) return authResponse;
+
+const { slug } = Astro.params;
+if (!slug) {
+  return Astro.redirect('/admin/posts');
+}
+
+// 获取文章内容
+const posts = await getCollection('blog');
+const post = posts.find(p => p.slug === slug);
+
+if (!post) {
+  return new Response('文章不存在', { status: 404 });
+}
+
+// 获取所有分类
+const allCategories = categories.getAll();
+
+// 处理表单提交
+if (Astro.request.method === 'POST') {
+  try {
+    const formData = await Astro.request.formData();
+    const title = formData.get('title')?.toString();
+    const content = formData.get('content')?.toString();
+    const description = formData.get('description')?.toString();
+    const tags = formData.get('tags')?.toString().split(',').map(tag => tag.trim()).filter(Boolean);
+    const category = formData.get('category')?.toString();
+    const isDraft = formData.get('isDraft') === 'true';
+    
+    if (!title || !content) {
+      return new Response('标题和内容不能为空', { status: 400 });
+    }
+
+    // 创建 Markdown 文件内容
+    const markdown = `---
+title: '${title}'
+description: '${description || ''}'
+pubDate: ${post.data.pubDate.toISOString()}
+updatedDate: ${new Date().toISOString()}
+tags: [${tags ? tags.map(tag => `'${tag}'`).join(', ') : ''}]
+category: ${category ? `'${category}'` : 'null'}
+draft: ${isDraft}
+---
+
+${content}`;
+
+    // 保存文件
+    const response = await fetch(`/api/posts/${encodeURIComponent(slug)}`, {
+      method: 'PUT',
+      headers: {
+        'Content-Type': 'application/json',
+      },
+      body: JSON.stringify({
+        content: markdown,
+      }),
+    });
+
+    if (!response.ok) {
+      const error = await response.text();
+      throw new Error(error);
+    }
+
+    return Astro.redirect('/admin/posts');
+  } catch (error) {
+    console.error('Error updating post:', error);
+    return new Response(error.message, { status: 400 });
+  }
+}
+
+// 解析 Markdown 内容
+const { content } = matter(post.body);
+
+// 修正图片路径
+const fixedContent = content.replace(/\/admin\/uploads\//g, '/uploads/');
+---
+
+<BaseLayout title={`编辑文章 - ${post.data.title}`}>
+  <!-- Hero Section -->
+  <section class="relative overflow-hidden bg-gradient-to-br from-blue-600 to-purple-700 dark:from-blue-900 dark:to-purple-900">
+    <div class="absolute inset-0">
+      <div class="absolute inset-0 bg-gradient-to-br from-blue-600/90 to-purple-700/90 dark:from-blue-900/90 dark:to-purple-900/90"></div>
+      <div class="absolute inset-0 bg-grid-white/[0.05] bg-grid-12"></div>
+    </div>
+    <div class="container relative mx-auto px-4 py-12">
+      <div class="max-w-4xl mx-auto">
+        <div class="flex flex-col md:flex-row justify-between items-center gap-6">
+          <div>
+            <h1 class="text-3xl md:text-4xl font-bold text-white mb-2 animate-fade-in">
+              编辑文章
+            </h1>
+            <p class="text-white/80 animate-fade-in animation-delay-200">
+              {post.data.draft ? '草稿' : '已发布'} · 最后更新于 {post.data.updatedDate?.toLocaleDateString('zh-CN') || post.data.pubDate.toLocaleDateString('zh-CN')}
+            </p>
+          </div>
+          <div class="flex flex-wrap gap-4 animate-fade-in animation-delay-300">
+            <a
+              href={`/blog/${post.slug}`}
+              target="_blank"
+              class="px-6 py-3 bg-white text-blue-600 rounded-full font-medium hover:bg-white/90 transition-colors"
+            >
+              预览文章
+            </a>
+            <a
+              href="/admin/posts"
+              class="px-6 py-3 bg-white/10 text-white rounded-full font-medium hover:bg-white/20 transition-colors"
+            >
+              返回列表
+            </a>
+          </div>
+        </div>
+      </div>
+    </div>
+  </section>
+
+  <!-- Content Section -->
+  <section class="py-12 bg-gray-50 dark:bg-gray-900">
+    <div class="container mx-auto px-4">
+      <div class="max-w-5xl mx-auto">
+        <form method="POST" class="space-y-8 animate-fade-in" id="post-form">
+          <!-- 基本信息 -->
+          <div class="bg-white dark:bg-gray-800 rounded-xl shadow-lg p-6">
+            <h2 class="text-2xl font-bold gradient-text mb-6">基本信息</h2>
+            <div class="grid gap-6 md:grid-cols-2">
+              <div>
+                <label for="title" class="block text-sm font-medium mb-1">文章标题</label>
+                <input
+                  type="text"
+                  id="title"
+                  name="title"
+                  value={post.data.title}
+                  required
+                  class="w-full px-4 py-2 bg-gray-50 dark:bg-gray-700 border border-gray-200 dark:border-gray-600 rounded-lg focus:ring-2 focus:ring-blue-500 dark:focus:ring-blue-400 focus:border-transparent"
+                />
+              </div>
+              <div>
+                <label for="category" class="block text-sm font-medium mb-1">分类</label>
+                <select
+                  id="category"
+                  name="category"
+                  class="w-full px-4 py-2 bg-gray-50 dark:bg-gray-700 border border-gray-200 dark:border-gray-600 rounded-lg focus:ring-2 focus:ring-blue-500 dark:focus:ring-blue-400 focus:border-transparent"
+                >
+                  <option value="">无分类</option>
+                  {allCategories.map(cat => (
+                    <option value={cat.slug} selected={cat.slug === post.data.category}>
+                      {cat.name}
+                    </option>
+                  ))}
+                </select>
+              </div>
+            </div>
+            <div class="mt-4">
+              <label for="description" class="block text-sm font-medium mb-1">描述</label>
+              <input
+                type="text"
+                id="description"
+                name="description"
+                value={post.data.description}
+                class="w-full px-4 py-2 bg-gray-50 dark:bg-gray-700 border border-gray-200 dark:border-gray-600 rounded-lg focus:ring-2 focus:ring-blue-500 dark:focus:ring-blue-400 focus:border-transparent"
+              />
+            </div>
+            <div class="mt-4">
+              <label for="tags" class="block text-sm font-medium mb-1">标签（用逗号分隔）</label>
+              <input
+                type="text"
+                id="tags"
+                name="tags"
+                value={post.data.tags.join(', ')}
+                class="w-full px-4 py-2 bg-gray-50 dark:bg-gray-700 border border-gray-200 dark:border-gray-600 rounded-lg focus:ring-2 focus:ring-blue-500 dark:focus:ring-blue-400 focus:border-transparent"
+                placeholder="技术, 生活, 随笔"
+              />
+            </div>
+          </div>
+
+          <!-- 文章内容 -->
+          <div class="bg-white dark:bg-gray-800 rounded-xl shadow-lg p-6">
+            <h2 class="text-2xl font-bold gradient-text mb-6">文章内容</h2>
+            <Editor
+              id="content"
+              name="content"
+              value={fixedContent}
+              required={true}
+            />
+          </div>
+
+          <!-- 发布设置 -->
+          <div class="bg-white dark:bg-gray-800 rounded-xl shadow-lg p-6">
+            <h2 class="text-2xl font-bold gradient-text mb-6">发布设置</h2>
+            <div class="flex items-center gap-2">
+              <input
+                type="checkbox"
+                id="isDraft"
+                name="isDraft"
+                value="true"
+                checked={post.data.draft}
+                class="w-4 h-4 text-blue-600 bg-gray-100 border-gray-300 rounded focus:ring-blue-500 dark:focus:ring-blue-400 dark:ring-offset-gray-800 focus:ring-2 dark:bg-gray-700 dark:border-gray-600"
+              />
+              <label for="isDraft" class="text-sm font-medium">保存为草稿</label>
+            </div>
+            <div class="flex justify-end gap-4 mt-6">
+              <button
+                type="button"
+                onclick="history.back()"
+                class="px-6 py-2 border border-gray-200 dark:border-gray-600 rounded-lg hover:bg-gray-100 dark:hover:bg-gray-700 transition-colors"
+              >
+                取消
+              </button>
+              <button
+                type="submit"
+                class="px-6 py-2 bg-blue-500 text-white rounded-lg hover:bg-blue-600 transition-colors"
+              >
+                保存
+              </button>
+            </div>
+          </div>
+        </form>
+      </div>
+    </div>
+  </section>
+</BaseLayout>
+
+<script define:vars={{ slug }}>
+  // 监听表单提交
+  const form = document.getElementById('post-form');
+  form?.addEventListener('submit', async (e) => {
+    e.preventDefault();
+    
+    const formData = new FormData(form);
+    const title = formData.get('title')?.toString().trim();
+    const content = tinymce.get('content')?.getContent().trim();
+    
+    if (!title) {
+      alert('请输入文章标题');
+      return;
+    }
+    
+    if (!content) {
+      alert('请输入文章内容');
+      return;
+    }
+
+    try {
+      // 使用服务端传递的 slug
+      if (!slug) {
+        throw new Error('无法获取文章标识');
+      }
+
+      // 创建 Markdown 文件内容
+      const markdown = `---
+title: '${title}'
+description: '${formData.get('description') || ''}'
+pubDate: ${formData.get('pubDate') || new Date().toISOString()}
+updatedDate: ${new Date().toISOString()}
+tags: [${formData.get('tags')?.toString().split(',').map(tag => `'${tag.trim()}'`).filter(Boolean).join(', ') || ''}]
+category: ${formData.get('category') ? `'${formData.get('category')}'` : 'null'}
+draft: ${formData.get('isDraft') === 'true'}
+---
+
+${content}`;
+
+      // 保存文件
+      const response = await fetch(`/api/posts/${encodeURIComponent(slug)}`, {
+        method: 'PUT',
+        headers: {
+          'Content-Type': 'application/json',
+        },
+        body: JSON.stringify({
+          content: markdown,
+        }),
+      });
+
+      if (response.ok) {
+        window.location.href = '/admin/posts';
+      } else {
+        const error = await response.text();
+        alert(error || '保存失败，请重试');
+      }
+    } catch (error) {
+      console.error('Error:', error);
+      alert('保存失败，请重试');
+    }
+  });
+
+  // 自动保存
+  let autoSaveTimer;
+  const autoSave = () => {
+    clearTimeout(autoSaveTimer);
+    autoSaveTimer = setTimeout(() => {
+      const formData = new FormData(form);
+      localStorage.setItem('post_draft', JSON.stringify({
+        title: formData.get('title'),
+        content: tinymce.get('content')?.getContent(),
+        description: formData.get('description'),
+        tags: formData.get('tags'),
+        category: formData.get('category'),
+        isDraft: formData.get('isDraft'),
+        timestamp: Date.now()
+      }));
+      console.log('Content auto-saved to draft');
+    }, 1000);
+  };
+
+  // 监听输入事件
+  document.querySelectorAll('input, select').forEach(el => {
+    el.addEventListener('input', autoSave);
+  });
+
+  // 加载自动保存的内容
+  window.addEventListener('load', () => {
+    const saved = localStorage.getItem('post_draft');
+    if (saved) {
+      const data = JSON.parse(saved);
+      const timestamp = new Date(data.timestamp);
+      const now = new Date();
+      const diff = Math.floor((now.getTime() - timestamp.getTime()) / 1000 / 60);
+
+      if (diff < 30) { // 只恢复30分钟内的自动保存
+        const restore = confirm(`发现 ${diff} 分钟前自动保存的内容，是否恢复？`);
+        if (restore) {
+          Object.entries(data).forEach(([key, value]) => {
+            if (key === 'content') {
+              tinymce.get('content')?.setContent(value);
+            } else if (key !== 'timestamp') {
+              const el = document.querySelector(`[name="${key}"]`);
+              if (el) {
+                if (el.type === 'checkbox') {
+                  el.checked = value;
+                } else {
+                  el.value = value;
+                }
+              }
+            }
+          });
+        }
+      }
+      localStorage.removeItem('post_draft');
+    }
+  });
+</script>
+
+<style>
+  /* 网格背景 */
+  .bg-grid-white {
+    mask-image: linear-gradient(to bottom, transparent, black, transparent);
+  }
+  .bg-grid-12 {
+    background-image: 
+      linear-gradient(to right, rgb(255 255 255 / 0.05) 1px, transparent 1px),
+      linear-gradient(to bottom, rgb(255 255 255 / 0.05) 1px, transparent 1px);
+    background-size: 24px 24px;
+  }
+
+  /* 动画 */
+  .animate-fade-in {
+    animation: fadeIn 0.8s ease-out forwards;
+  }
+
+  .animation-delay-200 {
+    animation-delay: 0.2s;
+  }
+
+  .animation-delay-300 {
+    animation-delay: 0.3s;
+  }
+
+  @keyframes fadeIn {
+    from {
+      opacity: 0;
+      transform: translateY(20px);
+    }
+    to {
+      opacity: 1;
+      transform: translateY(0);
+    }
+  }
+
+  /* 渐变文本 */
+  .gradient-text {
+    @apply bg-clip-text text-transparent bg-gradient-to-r from-blue-500 to-purple-600;
+  }
+
+  /* 响应式调整 */
+  @media (max-width: 768px) {
+    .container {
+      padding-left: 1rem;
+      padding-right: 1rem;
+    }
+  }
+</style> 

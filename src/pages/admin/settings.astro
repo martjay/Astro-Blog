@@ -1,0 +1,424 @@
+---
+import BaseLayout from '../../layouts/BaseLayout.astro';
+import { requireAuth } from '../../middleware/auth';
+import { settings } from '../../lib/settings';
+import type { Settings } from '../../lib/settings';
+
+// 验证管理员身份
+const authResponse = await requireAuth(Astro);
+if (authResponse) return authResponse;
+
+// 获取当前设置
+const currentSettings = settings.getAll();
+
+// 处理表单提交
+if (Astro.request.method === 'POST') {
+  const formData = await Astro.request.formData();
+  const newSettings: Partial<Settings> = {
+    siteTitle: formData.get('siteTitle')?.toString(),
+    siteDescription: formData.get('siteDescription')?.toString(),
+    siteKeywords: formData.get('siteKeywords')?.toString(),
+    siteAuthor: formData.get('siteAuthor')?.toString(),
+    siteEmail: formData.get('siteEmail')?.toString(),
+    postsPerPage: Number(formData.get('postsPerPage')),
+    enableComments: formData.get('enableComments') === 'true',
+    enableEmailNotification: formData.get('enableEmailNotification') === 'true',
+    smtpHost: formData.get('smtpHost')?.toString(),
+    smtpPort: Number(formData.get('smtpPort')),
+    smtpUser: formData.get('smtpUser')?.toString(),
+    smtpPass: formData.get('smtpPass')?.toString(),
+    icpNumber: formData.get('icpNumber')?.toString(),
+    analyticsCode: formData.get('analyticsCode')?.toString(),
+    heroTitle: formData.get('heroTitle')?.toString(),
+    heroSubtitle: formData.get('heroSubtitle')?.toString(),
+    showHero: formData.get('showHero') === 'true',
+  };
+
+  settings.updateAll(newSettings);
+  return Astro.redirect('/admin/settings?success=true');
+}
+
+const success = Astro.url.searchParams.get('success') === 'true';
+---
+
+<BaseLayout title="网站设置">
+  <div class="container mx-auto px-4 py-8">
+    <!-- 返回按钮 -->
+    <div class="mb-6">
+      <a
+        href="/admin/posts"
+        class="inline-flex items-center gap-2 text-gray-600 dark:text-gray-400 hover:text-blue-500 dark:hover:text-blue-400 transition-colors"
+      >
+        <svg class="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+          <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M10 19l-7-7m0 0l7-7m-7 7h18"></path>
+        </svg>
+        <span>返回后台首页</span>
+      </a>
+    </div>
+
+    <div class="max-w-4xl mx-auto">
+      <h1 class="text-3xl font-bold mb-8">网站设置</h1>
+
+      {success && (
+        <div class="mb-8 p-4 bg-green-100 dark:bg-green-900 text-green-800 dark:text-green-200 rounded-lg">
+          设置已保存
+        </div>
+      )}
+
+      <form method="POST" class="space-y-8">
+        <!-- 基本设置 -->
+        <section class="p-6 bg-white dark:bg-gray-800 rounded-lg shadow">
+          <h2 class="text-xl font-bold mb-6">基本设置</h2>
+          <div class="space-y-4">
+            <div>
+              <label for="siteTitle" class="block text-sm font-medium mb-1">网站标题</label>
+              <input
+                type="text"
+                id="siteTitle"
+                name="siteTitle"
+                value={currentSettings.siteTitle}
+                class="w-full px-3 py-2 border dark:border-gray-700 rounded-lg bg-transparent"
+              />
+            </div>
+            <div>
+              <label for="siteDescription" class="block text-sm font-medium mb-1">网站描述</label>
+              <textarea
+                id="siteDescription"
+                name="siteDescription"
+                rows="3"
+                class="w-full px-3 py-2 border dark:border-gray-700 rounded-lg bg-transparent"
+              >{currentSettings.siteDescription}</textarea>
+            </div>
+            <div>
+              <label for="siteKeywords" class="block text-sm font-medium mb-1">网站关键词</label>
+              <input
+                type="text"
+                id="siteKeywords"
+                name="siteKeywords"
+                value={currentSettings.siteKeywords}
+                class="w-full px-3 py-2 border dark:border-gray-700 rounded-lg bg-transparent"
+                placeholder="用逗号分隔"
+              />
+            </div>
+            <div>
+              <label for="siteAuthor" class="block text-sm font-medium mb-1">作者名称</label>
+              <input
+                type="text"
+                id="siteAuthor"
+                name="siteAuthor"
+                value={currentSettings.siteAuthor}
+                class="w-full px-3 py-2 border dark:border-gray-700 rounded-lg bg-transparent"
+              />
+            </div>
+            <div>
+              <label for="siteEmail" class="block text-sm font-medium mb-1">联系邮箱</label>
+              <input
+                type="email"
+                id="siteEmail"
+                name="siteEmail"
+                value={currentSettings.siteEmail}
+                class="w-full px-3 py-2 border dark:border-gray-700 rounded-lg bg-transparent"
+              />
+            </div>
+            <div>
+              <label for="postsPerPage" class="block text-sm font-medium mb-1">每页文章数</label>
+              <input
+                type="number"
+                id="postsPerPage"
+                name="postsPerPage"
+                value={currentSettings.postsPerPage}
+                min="1"
+                max="50"
+                class="w-full px-3 py-2 border dark:border-gray-700 rounded-lg bg-transparent"
+              />
+            </div>
+          </div>
+        </section>
+
+        <!-- 首页欢迎区域设置 -->
+        <section class="p-6 bg-white dark:bg-gray-800 rounded-lg shadow">
+          <h2 class="text-xl font-bold mb-6">首页欢迎区域设置</h2>
+          <div class="space-y-6">
+            <div class="flex items-center gap-2 mb-4">
+              <input
+                type="checkbox"
+                id="showHero"
+                name="showHero"
+                value="true"
+                checked={currentSettings.showHero}
+                class="rounded border-gray-300 dark:border-gray-700"
+              />
+              <label for="showHero" class="text-sm font-medium">显示欢迎区域</label>
+            </div>
+            <div class="grid gap-6 md:grid-cols-2">
+              <div>
+                <label class="block text-sm font-medium mb-2">欢迎标题</label>
+                <input
+                  type="text"
+                  name="heroTitle"
+                  value={currentSettings.heroTitle}
+                  class="w-full px-4 py-2 rounded-lg border dark:border-gray-700 bg-transparent"
+                />
+              </div>
+              <div>
+                <label class="block text-sm font-medium mb-2">欢迎副标题</label>
+                <input
+                  type="text"
+                  name="heroSubtitle"
+                  value={currentSettings.heroSubtitle}
+                  class="w-full px-4 py-2 rounded-lg border dark:border-gray-700 bg-transparent"
+                />
+              </div>
+            </div>
+          </div>
+        </section>
+
+        <!-- 评论设置 -->
+        <section class="p-6 bg-white dark:bg-gray-800 rounded-lg shadow">
+          <h2 class="text-xl font-bold mb-6">评论设置</h2>
+          <div class="space-y-4">
+            <div class="flex items-center gap-2">
+              <input
+                type="checkbox"
+                id="enableComments"
+                name="enableComments"
+                value="true"
+                checked={currentSettings.enableComments}
+                class="rounded border-gray-300 dark:border-gray-700"
+              />
+              <label for="enableComments">允许评论</label>
+            </div>
+            <div class="flex items-center gap-2">
+              <input
+                type="checkbox"
+                id="enableEmailNotification"
+                name="enableEmailNotification"
+                value="true"
+                checked={currentSettings.enableEmailNotification}
+                class="rounded border-gray-300 dark:border-gray-700"
+              />
+              <label for="enableEmailNotification">新评论邮件通知</label>
+            </div>
+          </div>
+        </section>
+
+        <!-- 邮件设置 -->
+        <section class="p-6 bg-white dark:bg-gray-800 rounded-lg shadow">
+          <h2 class="text-xl font-bold mb-6">邮件设置</h2>
+          <div class="space-y-4">
+            <div>
+              <label for="smtpHost" class="block text-sm font-medium mb-1">SMTP 服务器</label>
+              <input
+                type="text"
+                id="smtpHost"
+                name="smtpHost"
+                value={currentSettings.smtpHost}
+                class="w-full px-3 py-2 border dark:border-gray-700 rounded-lg bg-transparent"
+              />
+            </div>
+            <div>
+              <label for="smtpPort" class="block text-sm font-medium mb-1">SMTP 端口</label>
+              <input
+                type="number"
+                id="smtpPort"
+                name="smtpPort"
+                value={currentSettings.smtpPort}
+                class="w-full px-3 py-2 border dark:border-gray-700 rounded-lg bg-transparent"
+              />
+            </div>
+            <div>
+              <label for="smtpUser" class="block text-sm font-medium mb-1">SMTP 用户名</label>
+              <input
+                type="text"
+                id="smtpUser"
+                name="smtpUser"
+                value={currentSettings.smtpUser}
+                class="w-full px-3 py-2 border dark:border-gray-700 rounded-lg bg-transparent"
+              />
+            </div>
+            <div>
+              <label for="smtpPass" class="block text-sm font-medium mb-1">SMTP 密码</label>
+              <input
+                type="password"
+                id="smtpPass"
+                name="smtpPass"
+                value={currentSettings.smtpPass}
+                class="w-full px-3 py-2 border dark:border-gray-700 rounded-lg bg-transparent"
+              />
+            </div>
+          </div>
+        </section>
+
+        <!-- 其他设置 -->
+        <section class="p-6 bg-white dark:bg-gray-800 rounded-lg shadow">
+          <h2 class="text-xl font-bold mb-6">其他设置</h2>
+          <div class="space-y-4">
+            <div>
+              <label for="icpNumber" class="block text-sm font-medium mb-1">ICP 备案号</label>
+              <input
+                type="text"
+                id="icpNumber"
+                name="icpNumber"
+                value={currentSettings.icpNumber}
+                class="w-full px-3 py-2 border dark:border-gray-700 rounded-lg bg-transparent"
+              />
+            </div>
+            <div>
+              <label for="analyticsCode" class="block text-sm font-medium mb-1">统计代码</label>
+              <textarea
+                id="analyticsCode"
+                name="analyticsCode"
+                rows="4"
+                class="w-full px-3 py-2 border dark:border-gray-700 rounded-lg bg-transparent font-mono text-sm"
+              >{currentSettings.analyticsCode}</textarea>
+            </div>
+          </div>
+        </section>
+
+        <div class="flex gap-4 mt-8">
+          <button type="button" onclick="openChangePasswordModal()" class="px-6 py-2 bg-gray-500 text-white rounded-lg hover:bg-gray-600">修改密码</button>
+          <a href="/admin/database" class="px-6 py-2 bg-purple-500 text-white rounded-lg hover:bg-purple-600 inline-flex items-center gap-2">
+            <svg class="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+              <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M4 7v10c0 2.21 3.582 4 8 4s8-1.79 8-4V7M4 7c0 2.21 3.582 4 8 4s8-1.79 8-4M4 7c0-2.21 3.582-4 8-4s8 1.79 8 4m0 5c0 2.21-3.582 4-8 4s-8-1.79-8-4"></path>
+            </svg>
+            数据库管理
+          </a>
+          <button type="submit" class="px-6 py-2 bg-blue-500 text-white rounded-lg hover:bg-blue-600">保存设置</button>
+        </div>
+      </form>
+    </div>
+  </div>
+
+  <!-- 修改密码模态框 -->
+  <div id="changePasswordModal" class="fixed inset-0 bg-black bg-opacity-50 hidden flex items-center justify-center">
+    <div class="bg-white p-6 rounded-lg w-96">
+      <h3 class="text-xl font-bold mb-4">修改密码</h3>
+      <form id="changePasswordForm" class="space-y-4">
+        <div>
+          <label class="block text-sm font-medium text-gray-700">当前密码</label>
+          <input type="password" name="currentPassword" required class="mt-1 block w-full rounded-md border-gray-300 shadow-sm focus:border-blue-500 focus:ring-blue-500" />
+        </div>
+        <div>
+          <label class="block text-sm font-medium text-gray-700">新密码</label>
+          <input type="password" name="newPassword" required class="mt-1 block w-full rounded-md border-gray-300 shadow-sm focus:border-blue-500 focus:ring-blue-500" />
+        </div>
+        <div>
+          <label class="block text-sm font-medium text-gray-700">确认新密码</label>
+          <input type="password" name="confirmPassword" required class="mt-1 block w-full rounded-md border-gray-300 shadow-sm focus:border-blue-500 focus:ring-blue-500" />
+        </div>
+        <div class="flex justify-end gap-4 mt-6">
+          <button type="button" onclick="closeChangePasswordModal()" class="px-4 py-2 bg-gray-200 text-gray-800 rounded-lg hover:bg-gray-300">取消</button>
+          <button type="submit" class="px-4 py-2 bg-blue-500 text-white rounded-lg hover:bg-blue-600">确认修改</button>
+        </div>
+      </form>
+    </div>
+  </div>
+</BaseLayout>
+
+<script>
+  // 修改密码相关函数
+  function openChangePasswordModal() {
+    document.getElementById('changePasswordModal').classList.remove('hidden');
+  }
+
+  function closeChangePasswordModal() {
+    document.getElementById('changePasswordModal').classList.add('hidden');
+  }
+
+  // 处理修改密码表单提交
+  document.getElementById('changePasswordForm')?.addEventListener('submit', async (e) => {
+    e.preventDefault();
+    
+    const formData = new FormData(e.target as HTMLFormElement);
+    const currentPassword = formData.get('currentPassword')?.toString();
+    const newPassword = formData.get('newPassword')?.toString();
+    const confirmPassword = formData.get('confirmPassword')?.toString();
+
+    // 禁用提交按钮，防止重复提交
+    const submitButton = e.target.querySelector('button[type="submit"]') as HTMLButtonElement;
+    if (submitButton) {
+      submitButton.disabled = true;
+      submitButton.textContent = '修改中...';
+    }
+
+    try {
+      console.log('Form submitted with:', {
+        currentPassword: currentPassword ? '***' : undefined,
+        newPassword: newPassword ? '***' : undefined,
+        confirmPassword: confirmPassword ? '***' : undefined
+      });
+
+      if (!currentPassword || !newPassword || !confirmPassword) {
+        throw new Error('请填写所有密码字段');
+      }
+
+      if (newPassword !== confirmPassword) {
+        throw new Error('新密码与确认密码不匹配');
+      }
+
+      if (newPassword.length < 6) {
+        throw new Error('新密码长度不能小于6位');
+      }
+
+      console.log('Sending password change request...');
+      const response = await fetch('/api/admin/change-password', {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+        },
+        body: JSON.stringify({
+          currentPassword,
+          newPassword,
+        }),
+        credentials: 'include'
+      });
+
+      console.log('Response status:', response.status);
+      const responseText = await response.text();
+      console.log('Raw response:', responseText);
+
+      let data;
+      try {
+        data = JSON.parse(responseText);
+        console.log('Parsed response data:', data);
+      } catch (e) {
+        console.error('Failed to parse response:', e);
+        throw new Error('服务器响应格式错误');
+      }
+
+      if (!response.ok) {
+        throw new Error(data.error || '密码修改失败');
+      }
+
+      // 显示成功消息
+      alert(data.message || '密码修改成功，请重新登录');
+      
+      // 清除所有cookie
+      document.cookie.split(';').forEach(cookie => {
+        const [name] = cookie.split('=');
+        document.cookie = `${name.trim()}=; expires=Thu, 01 Jan 1970 00:00:00 GMT; path=/`;
+      });
+
+      // 重定向到登录页面
+      window.location.href = '/admin/login';
+    } catch (error) {
+      console.error('Error changing password:', error);
+      alert(error instanceof Error ? error.message : '密码修改失败，请重试');
+    } finally {
+      // 恢复提交按钮状态
+      if (submitButton) {
+        submitButton.disabled = false;
+        submitButton.textContent = '确认修改';
+      }
+    }
+  });
+
+  // 声明全局函数
+  declare global {
+    function openChangePasswordModal(): void;
+    function closeChangePasswordModal(): void;
+  }
+
+  window.openChangePasswordModal = openChangePasswordModal;
+  window.closeChangePasswordModal = closeChangePasswordModal;
+</script> 
